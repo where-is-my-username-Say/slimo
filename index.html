@@ -5791,6 +5791,7 @@ let prediction = null;
 let motionLink = null;
 let watchedPeerConnection = null;
 let watchMotionChannel = null;
+let peerDataChannelHandler = null;
 let lastFast = 0;
 let projectileFrameAt = 0;
 let localDashSoundAt = -Infinity;
@@ -5991,8 +5992,10 @@ function resetMotion() {
   for (const pose of priorMotion) for (const key of Object.keys(pose)) delete pose[key];
 }
 function stopFastChannel() {
-  if (watchedPeerConnection && watchMotionChannel) watchedPeerConnection.removeEventListener('datachannel', watchMotionChannel, true);
-  watchedPeerConnection = watchMotionChannel = null;
+  if (watchedPeerConnection?.ondatachannel === watchMotionChannel && watchMotionChannel) {
+    watchedPeerConnection.ondatachannel = peerDataChannelHandler;
+  }
+  watchedPeerConnection = watchMotionChannel = peerDataChannelHandler = null;
   const old = motionLink;
   motionLink = null;
   lastFast = 0;
@@ -6034,13 +6037,15 @@ function setupMotionChannel(connection, hostSide, token) {
   }
   if (hostSide) {
     watchedPeerConnection = pc;
+    const handlePeerChannel = pc.ondatachannel;
+    peerDataChannelHandler = handlePeerChannel;
     watchMotionChannel = event => {
-      if (event.channel.label !== 'slime-motion') return;
-      event.stopImmediatePropagation();
-      attach(event.channel);
+      if (event.channel.label === 'slime-motion') attach(event.channel);
+      else handlePeerChannel?.call(pc, event);
     };
-    // PeerJS also listens for data channels. Claim the motion channel before its reliable handler sees it.
-    pc.addEventListener('datachannel', watchMotionChannel, true);
+    // PeerJS's WebRTC adapter drops capture options when it wraps datachannel listeners.
+    // Route the motion channel here so PeerJS keeps its reliable channel for match state.
+    pc.ondatachannel = watchMotionChannel;
   } else {
     try { attach(pc.createDataChannel('slime-motion', { ordered: false, maxRetransmits: 0 })); }
     catch { /* Reliable state remains available. */ }
@@ -7454,7 +7459,8 @@ function attach(connection, hostSide, token) {
     }
     lastRemote = lastSnapshot = performance.now();
     if (hostSide) setupMotionChannel(connection, true, token);
-    send({ t: 'hello', version: PROTOCOL, name: profile.name, color: chosen, ready: gameReady() });
+    send({ t: 'hello', version: PROTOCOL, name: profile.name, color: chosen, ready: gameReady(),
+      motion: hostSide && watchedPeerConnection === connection.peerConnection && !!watchMotionChannel });
   });
   connection.on('data', packet => {
     if (token !== netAttempt || link !== connection || !packet || typeof packet !== 'object') return;
@@ -7490,7 +7496,7 @@ function attach(connection, hostSide, token) {
         restartMatch();
         state.paused = !gameReady() || !remoteReady;
         broadcastState();
-      } else setupMotionChannel(connection, false, token);
+      } else if (packet.motion === true) setupMotionChannel(connection, false, token);
       return;
     }
     if (!welcomed) return;
