@@ -1,6 +1,8 @@
 import { DurableObject } from 'cloudflare:workers';
 const CAP=50, PROTOCOL=2, INPUT=54, STATE=55, PLAYER_BYTES=33;
-const ALLOWED_ORIGINS=new Set(['https://slimeoo-plum.vercel.app']);
+const ALLOWED_ORIGINS=new Set(['https://slimeoo-plum.vercel.app','https://slimo-ten.vercel.app']);
+const EMOTES=['none','dance','sit','wave','spin','bounce'];
+const EMOTE_DURATION_MS=[0,0,0,1650,1150,1450];
 const cors={ 'Access-Control-Allow-Origin':'*', 'Access-Control-Allow-Methods':'GET, OPTIONS', 'Content-Type':'application/json' };
 const response=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:cors});
 const bounded=(v,lo,hi)=>Math.min(hi,Math.max(lo,Number.isFinite(v)?v:0));
@@ -23,14 +25,16 @@ export class GameRoom extends DurableObject {
     const pair=new WebSocketPair(),[client,server]=Object.values(pair);
     const taken=new Set(this.players.keys()); let id=1;while(taken.has(id)&&id<=65535)id++;
     const p={id,name:'Slime',color:0,ranks:{},wins:0,joined:false,x:0,z:0,r:0,vx:0,vz:0,kx:0,kz:0,hp:100,en:0,seq:0,ready:false,actions:[0,0,0,0],attack:'',attackTime:0,duration:0,contactTime:0,dashTime:0,dash:0,air:0,stun:0,shield:0,emote:0,emoteAge:0,emoteUntil:0,chatAt:0};
+    server.binaryType='arraybuffer';
     server.serializeAttachment({id});this.ctx.acceptWebSocket(server);this.players.set(id,{...p,ws:server});
     return new Response(null,{status:101,webSocket:client});
   }
-  webSocketMessage(ws,raw){
+  async webSocketMessage(ws,raw){
     const id=ws.deserializeAttachment()?.id,p=this.players.get(id);if(!p)return;
     if(typeof raw!=='string'){
-      const buf=raw instanceof ArrayBuffer?raw:raw?.buffer;
-      if(!p.joined||!buf||buf.byteLength!==22)return;
+      if(!p.joined)return;
+      const buf=raw instanceof Blob?await raw.arrayBuffer():raw;
+      if(this.players.get(id)!==p||!(buf instanceof ArrayBuffer)||buf.byteLength!==22)return;
       const v=new DataView(buf);if(v.getUint8(0)!==INPUT||v.getUint8(1)!==PROTOCOL)return;
       const seq=v.getUint32(4);if(seq<=p.seq)return;
       p.seq=seq;p.ready=v.getUint8(2)===1;
@@ -60,6 +64,9 @@ export class GameRoom extends DurableObject {
           }
         }
       }
+      if(this.roster().length>=CAP){
+        send(ws,{t:'error',message:'Open Meadow is full.'});this.leave(ws);return;
+      }
       p.browserKey = browserKey;
       p.joined=true;p.name=String(m.name||'Slime').slice(0,16);p.color=bounded(m.color|0,0,3);
       p.ranks=m.ranks&&typeof m.ranks==='object'?m.ranks:{};
@@ -83,10 +90,17 @@ export class GameRoom extends DurableObject {
       if(JSON.stringify(d).length>14000)return;
       send(target.ws,{t:'voiceSignal',from:p.id,data:d});
     }else if(m.t==='emote'){
-      const keys=['none','sit','wave','spin','bounce'];
-      let key=String(m.key||'');if(key==='random')key=keys[1+Math.floor(Math.random()*4)];
-      if(key==='playSlap'){p.attack='slap';p.attackTime=.3;p.duration=.3;p.contactTime=.12;}
-      else {p.emote=Math.max(0,keys.indexOf(key));p.emoteAge=0;p.emoteUntil=Date.now()+1700;}
+      if(m.key==='playSlap'){
+        p.emote=p.emoteAge=p.emoteUntil=0;
+        p.attack='slap';p.attackTime=.3;p.duration=.3;p.contactTime=.12;
+        return;
+      }
+      const next=m.key==='random'?1+Math.floor(Math.random()*(EMOTES.length-1)):EMOTES.indexOf(m.key);
+      if(next<0)return;
+      p.emote=p.emote===next?0:next;
+      p.emoteAge=0;
+      const duration=EMOTE_DURATION_MS[p.emote];
+      p.emoteUntil=duration?Date.now()+duration:0;
     }
   }
   tick(){
@@ -95,7 +109,7 @@ export class GameRoom extends DurableObject {
     for(const p of players){
       p.dash=Math.max(0,p.dash-dt);p.dashTime=Math.max(0,p.dashTime-dt);
       p.attackTime=Math.max(0,p.attackTime-dt);if(!p.attackTime)p.attack='';
-      if(p.emote){p.emoteAge+=dt;if(Date.now()>p.emoteUntil||Math.hypot(p.ix||0,p.iz||0)>.1){p.emote=0;p.emoteAge=0;}}
+      if(p.emote){p.emoteAge+=dt;if((p.emoteUntil&&Date.now()>=p.emoteUntil)||Math.hypot(p.ix||0,p.iz||0)>.1){p.emote=0;p.emoteAge=0;}}
       const ix=p.ix||0,iz=p.iz||0,len=Math.max(1,Math.hypot(ix,iz));
       const targetX=ix/len*7.35,targetZ=iz/len*7.35;
       const factor=1-Math.exp(-19*dt);
@@ -117,9 +131,9 @@ export class GameRoom extends DurableObject {
         timer(o+20,p.attackTime);timer(o+21,p.duration);timer(o+22,p.contactTime);
         timer(o+23,p.dashTime);timer(o+24,p.air);timer(o+25,p.dash);
         timer(o+26,p.stun);timer(o+27,0);v.setUint8(o+28,0);v.setUint8(o+29,0);
-        v.setUint8(o+30,p.emote||0);v.setUint16(o+31,Math.round(bounded(p.emoteAge,0,65.535)*1000));o+=PLAYER_BYTES;
+        v.setUint8(o+30,p.emote||0);v.setUint16(o+31,Math.round((p.emoteAge%40)*1000));o+=PLAYER_BYTES;
       }
-      try{if(receiver.ws.bufferedAmount<262144)receiver.ws.send(data);}catch{}
+      try{if(receiver.ws.readyState===1&&(receiver.ws.bufferedAmount??0)<262144)receiver.ws.send(data);}catch{}
     }
   }
   webSocketClose(ws){this.leave(ws);}webSocketError(ws){this.leave(ws);}

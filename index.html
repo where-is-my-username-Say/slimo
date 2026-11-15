@@ -6184,7 +6184,11 @@ function loadAudioClip(name) {
   }).then(bytes => audio.ctx.decodeAudioData(bytes)).then(buffer => {
     audio.buffers.set(name, buffer);
     return buffer;
-  }).catch(error => { console.warn('Could not load sound:', name, error); return null; });
+  }).catch(error => {
+    audio.loading.delete(name);
+    console.warn('Could not load sound:', name, error);
+    return null;
+  });
   audio.loading.set(name, task);
   return task;
 }
@@ -6195,21 +6199,23 @@ function prepareMusic() {
     if (!url) continue;
     const track = document.createElement('audio');
     track.loop = true;
+    track.playsInline = true;
     track.preload = 'auto';
     track.src = url;
     const gain = audio.ctx.createGain();
     gain.gain.value = 0;
     audio.ctx.createMediaElementSource(track).connect(gain).connect(audio.music);
-    const info = { track, gain, level: 0, fadeTimer: 0 };
-    audio.tracks.set(name, info);
-    track.play().then(() => {
-      if (!info.level) track.pause();
-    }).catch(() => {});
+    audio.tracks.set(name, { track, gain, level: 0, fadeTimer: 0, starting: false });
   }
 }
 function mixTrack(info, level, now) {
   const { track, gain } = info;
-  if (level && track.paused) track.play().catch(() => {});
+  if (level && track.paused && !info.starting) {
+    info.starting = true;
+    track.play().catch(() => {
+      // The next user gesture can retry playback if autoplay was blocked.
+    }).finally(() => { info.starting = false; });
+  }
   if (info.level === level) return;
   info.level = level;
   clearTimeout(info.fadeTimer);
@@ -6238,9 +6244,13 @@ function unlockAudio() {
         ctx, master, effects, music, buffers: new Map(), loading: new Map(), tracks: new Map(),
         voices: 0, smack: 0, selection: '', inRing: false, ringTrack: -1
       };
+    }
+    if (audio.ctx.state !== 'running' && !audio.resuming) {
+      audio.resuming = audio.ctx.resume().catch(() => {}).finally(() => { audio.resuming = null; });
+    }
+    if (settings.vol > 0 && settings.sfx > 0) {
       for (const name of new Set([...slapSamples, ...Object.values(clipMap)])) loadAudioClip(name);
     }
-    if (audio.ctx.state !== 'running') audio.ctx.resume().catch(() => {});
     if (settings.music > 0 && settings.vol > 0 && !audio.tracks.size) prepareMusic();
     refreshAudio();
   } catch { /* Audio is optional for unsupported browsers. */ }
@@ -7824,8 +7834,9 @@ if (inviteCode) {
 }
 updateSwatches();
 document.addEventListener('click', () => {
-  if (!audio || audio.ctx.state !== 'running') unlockAudio();
-}, { once: true });
+  const track = audio?.tracks.get(audio.selection);
+  if (audio?.ctx.state !== 'running' || (track?.level && track.track.paused)) unlockAudio();
+});
 addEventListener('resize', () => {
   resizeView();
   updateOrientation();
