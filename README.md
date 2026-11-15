@@ -17,6 +17,6 @@ The game uses Vercel for the HTML and audio, a dedicated Cloudflare Worker named
 ## Controls
 
 - **F** or **Jump** jumps. Hold and release **E**, right-click, or **Spit** to charge in a duel. At full charge the shot homes in and goes through cover. Dodge timing or a timed slap can stop it.
-- Comic impact frames play on combo hits. Cinematic mode cycles through **Backstep**, **Skyhook**, and **Whirlwind** before the knockout ragdoll. Reduced motion skips these finishes and softens Atomic’s flash.
-- The Owner has a gold aura, Wave in duels, and Atomic. A player who wins a completed duel against the Owner unlocks Atomic after both signed-in clients confirm the result. **X** or the **Atomic** button plays the 16-second sequence. It uses browser speech when available.
+- Black-and-white anime impact frames play on combo hits and finishers. Reduced motion disables the frames. Cinematic mode cycles through **Backstep**, **Skyhook**, and **Whirlwind** before the knockout ragdoll. Reduced motion skips these finishes and reduces Atomic’s particle effects.
+- The Owner has a gold aura, Wave in duels, and Atomic. A player who wins a completed duel against the Owner unlocks Atomic after both signed-in clients confirm the result. **X** or the **Atomic** button starts a silent 16-second aura around the caster while play continues.
 - Invites are in-game notifications. The game checks while its tab is visible. Friend-duel results are agreed by both clients. The backend does not simulate the duel or adjudicate client cheating. Open Meadow retains its existing public-room combat behavior, with account gating, jump, appearance, and Atomic added.

@@ -849,16 +849,44 @@ body.public-play #pcHint, body.touch #publicHint { display: none; }
 .quick-chat-bar button { flex:none; min-width:43px; min-height:40px; border-radius:9px; }
 @media(max-height:480px) { .quick-chat-bar:not([hidden]) { bottom:max(8px,env(safe-area-inset-bottom)); width:min(440px,calc(100vw - 20px)); } }
 #accountGate{position:fixed;inset:0;z-index:90;display:grid;place-items:center;padding:18px;background:radial-gradient(ellipse at 25% 14%,#312448,#0e0b17 66%);color:#fff4eb}
-#accountGate[hidden],#atomicCaption[hidden],#accountTools[hidden]{display:none}
+#accountGate[hidden],#accountTools[hidden]{display:none}
 .account-card{width:min(430px,100%);border:1px solid #c8a3e14c;border-radius:24px;background:#20182cd9;padding:clamp(20px,5vw,40px);box-shadow:0 18px 90px #09050c;overflow:auto;max-height:95vh}
 .account-card h1{font-size:clamp(42px,8vw,76px);line-height:.88;letter-spacing:-.085em;margin:0 0 18px}.account-card p{font-size:14px;color:#ecdae9}.account-card input,.account-row input,.account-row select{color:#fff5ee;background:#201826;border:1px solid #c8a3e168;padding:9px;border-radius:8px;min-width:0}
 .account-row{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:6px 0}.account-row button{min-height:32px}.account-row label{font-size:13px;color:#efdaf4}.account-row select{padding:5px}
 #accountAward{font-size:12px;color:#ffd98a}#retryGoogle{margin-top:12px;font-size:12px}
-#slimoImpact,#atomicFlash{position:fixed;inset:0;pointer-events:none;opacity:0;z-index:70}
-#slimoImpact{--impact-color:#ffd784;box-shadow:inset 0 0 0 3px var(--impact-color),inset 0 0 150px var(--impact-color);background:repeating-conic-gradient(from 12deg at 52% 51%,#15101a55 0deg 2deg,transparent 4deg 21deg,#fff7e741 22deg 23deg,transparent 25deg 38deg);mask-image:radial-gradient(ellipse,transparent 19%,black 65%)}
-#atomicFlash{background:#eacbff;z-index:74}
-#atomicCaption{position:fixed;z-index:75;bottom:12%;inset-inline:0;text-align:center;color:#f6dfff;text-shadow:0 0 28px #aa36ff,0 4px 17px #130526;font-size:clamp(25px,8vw,105px);font-weight:900;letter-spacing:.14em;pointer-events:none}
-body.atomic-playing #hud,body.atomic-playing #touchControls{visibility:hidden}
+#slimoImpact{
+  position:fixed;inset:0;pointer-events:none;z-index:70;
+  background:rgba(255,255,255,.08);
+  -webkit-backdrop-filter:grayscale(1) contrast(3.6) brightness(1.11);
+  backdrop-filter:grayscale(1) contrast(3.6) brightness(1.11);
+}
+#slimoImpact::before,#slimoImpact::after{
+  content:'';position:absolute;inset:0;
+  -webkit-mask-image:radial-gradient(ellipse at center,transparent 29%,black 79%);
+  mask-image:radial-gradient(ellipse at center,transparent 29%,black 79%);
+}
+#slimoImpact::before{
+  background:repeating-conic-gradient(from 16deg at 50% 51%,#000 .2deg .65deg,transparent 1deg 13deg,#fff 13.15deg 13.7deg,transparent 14deg 27deg);
+  box-shadow:inset 0 0 7vmin 1.1vmin #080808;
+}
+#slimoImpact::after{
+  background:repeating-conic-gradient(from 43deg at 50% 51%,transparent 0deg 12deg,#000 12deg 12.35deg,transparent 12.7deg 17deg);
+  opacity:.73;
+}
+body[data-impact-frame="negative"] #slimoImpact{
+  background:rgba(0,0,0,.12);
+  -webkit-backdrop-filter:grayscale(1) contrast(4.1) brightness(1.26) invert(1);
+  backdrop-filter:grayscale(1) contrast(4.1) brightness(1.26) invert(1);
+}
+body[data-impact-frame="negative"] #slimoImpact::before,body[data-impact-frame="negative"] #slimoImpact::after{filter:invert(1)}
+@supports not ((backdrop-filter:grayscale(1)) or (-webkit-backdrop-filter:grayscale(1))){
+  body[data-impact-frame="ink"] #stage{filter:grayscale(1) contrast(3.6) brightness(1.11)}
+  body[data-impact-frame="negative"] #stage{filter:grayscale(1) contrast(4.1) brightness(1.26) invert(1)}
+}
+@media(prefers-reduced-motion:reduce){
+  #slimoImpact{display:none}
+  body[data-impact-frame] #stage{filter:none}
+}
 #aJump{width:53px;height:53px;right:144px;bottom:54px}
 #aSpit::after{content:'';position:absolute;inset:-4px;border-radius:50%;pointer-events:none;background:conic-gradient(#d3a8ff var(--charge,0%),transparent 0);mask-image:radial-gradient(transparent 61%,black 65%);filter:drop-shadow(0 0 5px #cf9aff)}
 #duelTools{z-index:11}
@@ -1091,7 +1119,7 @@ body.atomic-playing #hud,body.atomic-playing #touchControls{visibility:hidden}
   </section>
 </div>
 <div id="toast" role="status" hidden></div>
-<div id="slimoImpact" aria-hidden="true"></div><div id="atomicFlash" aria-hidden="true"></div><div id="atomicCaption" hidden></div>
+<div id="slimoImpact" aria-hidden="true" hidden></div>
 <div id="accountGate"><section class="account-card" aria-labelledby="accountTitle">
 <h1 id="accountTitle">SLIMO</h1><p>Sign in to customize your slime, invite friends, and enter the arena.</p>
 <div id="googleSlot"></div>
@@ -1275,7 +1303,7 @@ function closeOverlay(restoreFocus = true) {
   if (restoreFocus && focusBeforeOverlay?.getClientRects().length) focusBeforeOverlay.focus({ preventScroll: true });
 }
 function gameReady() {
-  return isLandscape() && !document.hidden && (mode==='public' || !atomicStarted) && (!activeOverlay || (mode !== 'bot' && state.phase === 'over'));
+  return isLandscape() && !document.hidden && (!activeOverlay || (mode !== 'bot' && state.phase === 'over'));
 }
 function buildSettings() {
   const body = $('setBody');
@@ -4040,7 +4068,7 @@ function showEffect(q) {
   switch (q.type) {
     case 'atomic': {
       const actor=q.i===0?slimoDuel?.host:q.i===1?slimoDuel?.guest:null;
-      if(mode!=='guest'||actor?.atomic) startAtomic();
+      if(mode!=='guest'||actor?.atomic) startAtomic(q.i);
       break;
     }
     case 'ownerWave':
@@ -4057,7 +4085,6 @@ function showEffect(q) {
     case 'slap':
       playSound('slap', q.x, q.z, q.heavy);
       swipe(q, q.playful ? 0xe1e8ac : colors.light);
-      if(!q.playful && local) slimoImpactFrame(q.combo||1,colors.hud);
       if (local && (mode !== 'public' || q.playful) && coarse) vibrate('swing');
       if (q.heavy) particles(q.x, .68, q.z, 12, 0xffcc87, 8.4, 2.1, .36, 'line', rotation);
       break;
@@ -4144,7 +4171,7 @@ function showEffect(q) {
         impactDebris(q.x, q.z, q.nx, q.nz);
         if (affected && !settings.reduced) impactTint = Math.max(impactTint, .51);
       }
-      if(q.chain && !q.finish) slimoImpactFrame(q.chain,colors.hud);
+      if(q.chain) slimoImpactFrame(q.chain);
       if (!q.finish && !q.quiet) {
         const lines = q.source === 'fire' ? ['TOAST!', 'SIZZLE!', 'FWOOSH!', 'HOT!'] : spit ? ['SPLOT!', 'PLOP!', 'BLEH!', 'SPLAT!'] : ['WHAP!', 'PAF!', 'SMACK!', 'PLAP!'];
         if (q.heavy || q.returned || q.id % 3 !== 1) word(q, q.heavy ? 'KAPOW!' : lines[q.id % lines.length], spit && q.source !== 'fire' ? '#b7ffee' : '#ffe2a8');
@@ -6931,7 +6958,7 @@ async function openPublicConnection() {
       }
       if (room.events.length > 200) room.events.splice(0, room.events.length - 200);
     } else if (packet.t === 'atomic') {
-      if(room.roster.has(packet.i)) startAtomic();
+      if(room.roster.has(packet.i)) startAtomic(packet.i);
     } else if (packet.t === 'voiceSignal') {
       handleRoomVoiceSignal(packet);
     } else if (packet.t === 'chat') {
@@ -8062,9 +8089,8 @@ function frame(now) {
   }
   drawSlimoFinish(now);
   drawSlimoImpact(now);
-  const atomic=drawAtomic(now);
-  document.body.classList.toggle('atomic-playing',atomic);
-  if(!atomic) renderer.render(scene, camera);
+  drawAtomic(now);
+  renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
 slimoInitAccount();
