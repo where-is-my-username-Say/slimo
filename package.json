@@ -1,0 +1,8 @@
+{
+  "name": "slimo-friend-duels",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "deploy:worker": "wrangler deploy" },
+  "devDependencies": { "wrangler": "4.162.0" }
+}

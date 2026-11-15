@@ -1,0 +1,4 @@
+{
+  "rewrites": [{ "source": "/api/slimo/:path*", "destination": "https://slimo-meadow.balochnajool.workers.dev/api/slimo/:path*" }],
+  "headers": [{ "source": "/(.*)", "headers": [{ "key": "Cross-Origin-Opener-Policy", "value": "same-origin-allow-popups" }] }]
+}

@@ -848,6 +848,21 @@ body.public-play #pcHint, body.touch #publicHint { display: none; }
 .quick-chat-bar input { flex:1; min-width:0; border-radius:9px; padding:11px 12px; color:#fff; background:#20383a; border:1px solid #58766a; font-size:16px; }
 .quick-chat-bar button { flex:none; min-width:43px; min-height:40px; border-radius:9px; }
 @media(max-height:480px) { .quick-chat-bar:not([hidden]) { bottom:max(8px,env(safe-area-inset-bottom)); width:min(440px,calc(100vw - 20px)); } }
+#accountGate{position:fixed;inset:0;z-index:90;display:grid;place-items:center;padding:18px;background:radial-gradient(ellipse at 25% 14%,#312448,#0e0b17 66%);color:#fff4eb}
+#accountGate[hidden],#atomicCaption[hidden],#accountTools[hidden]{display:none}
+.account-card{width:min(430px,100%);border:1px solid #c8a3e14c;border-radius:24px;background:#20182cd9;padding:clamp(20px,5vw,40px);box-shadow:0 18px 90px #09050c;overflow:auto;max-height:95vh}
+.account-card h1{font-size:clamp(42px,8vw,76px);line-height:.88;letter-spacing:-.085em;margin:0 0 18px}.account-card p{font-size:14px;color:#ecdae9}.account-card input,.account-row input,.account-row select{color:#fff5ee;background:#201826;border:1px solid #c8a3e168;padding:9px;border-radius:8px;min-width:0}
+.account-row{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:6px 0}.account-row button{min-height:32px}.account-row label{font-size:13px;color:#efdaf4}.account-row select{padding:5px}
+#accountAward{font-size:12px;color:#ffd98a}#retryGoogle{margin-top:12px;font-size:12px}
+#slimoImpact,#atomicFlash{position:fixed;inset:0;pointer-events:none;opacity:0;z-index:70}
+#slimoImpact{--impact-color:#ffd784;box-shadow:inset 0 0 0 3px var(--impact-color),inset 0 0 150px var(--impact-color);background:repeating-conic-gradient(from 12deg at 52% 51%,#15101a55 0deg 2deg,transparent 4deg 21deg,#fff7e741 22deg 23deg,transparent 25deg 38deg);mask-image:radial-gradient(ellipse,transparent 19%,black 65%)}
+#atomicFlash{background:#eacbff;z-index:74}
+#atomicCaption{position:fixed;z-index:75;bottom:12%;inset-inline:0;text-align:center;color:#f6dfff;text-shadow:0 0 28px #aa36ff,0 4px 17px #130526;font-size:clamp(25px,8vw,105px);font-weight:900;letter-spacing:.14em;pointer-events:none}
+body.atomic-playing #hud,body.atomic-playing #touchControls{visibility:hidden}
+#aJump{width:53px;height:53px;right:144px;bottom:54px}
+#aSpit::after{content:'';position:absolute;inset:-4px;border-radius:50%;pointer-events:none;background:conic-gradient(#d3a8ff var(--charge,0%),transparent 0);mask-image:radial-gradient(transparent 61%,black 65%);filter:drop-shadow(0 0 5px #cf9aff)}
+#duelTools{z-index:11}
+#hud #duelTools button{font-size:12px;padding:7px 11px}
 </style>
 </head>
 <body>
@@ -875,6 +890,11 @@ body.public-play #pcHint, body.touch #publicHint { display: none; }
         <button class="swatch" type="button" data-color="3" style="--swatch:#efba55" aria-label="Gold"></button>
       </div>
     </div>
+    <div id="accountTools" hidden>
+      <div class="account-row"><strong id="accountName"></strong><span id="accountAward"></span><button id="slimoLogout" type="button">Sign out</button></div>
+      <div class="account-row"><label for="slimeHat">Hat</label><select id="slimeHat"><option value="none">None</option><option value="crown">Crown</option><option value="halo">Halo</option><option value="horns">Horns</option></select>
+      <label for="slimeAccent">Accent</label><select id="slimeAccent"><option value="mint">Mint</option><option value="gold">Gold</option><option value="violet">Violet</option><option value="ice">Ice</option></select><button id="saveSlimoLook" type="button">Save look</button></div>
+    </div>
     <div class="mode-select" role="group" aria-label="Game format">
       <button id="rogueMode" type="button" aria-pressed="true">Roguelike run</button>
       <button id="classicMode" type="button" aria-pressed="false">Classic duel</button>
@@ -886,7 +906,7 @@ body.public-play #pcHint, body.touch #publicHint { display: none; }
     </div>
     <form id="joinForm" class="join-line"><label class="sr-only" for="joinCode">Invite link or room code</label><input id="joinCode" type="text" maxlength="1024" autocapitalize="off" spellcheck="false" autocomplete="off" placeholder="Invite link or room code"><button id="join">Join</button></form>
     <p id="status" role="status"></p>
-    <div class="lobby-links"><button id="openGuide">How to play</button><button id="skillBook">Skills</button><button id="roomBuild">Meadow build</button><button id="friends">Saved friends</button><button id="openSet">Settings</button></div>
+    <div class="lobby-links"><button id="openGuide">How to play</button><button id="skillBook">Skills</button><button id="roomBuild">Meadow build</button><button id="friends">Friends</button><button id="openSet">Settings</button></div>
   </section>
 </main>
 
@@ -904,7 +924,7 @@ body.public-play #pcHint, body.touch #publicHint { display: none; }
       <div class="energy" aria-hidden="true"><i id="theirEnergy"></i></div>
     </div>
   </div>
-  <div id="connection"></div>
+  <div id="connection"></div><div class="account-row" id="duelTools" style="position:absolute;top:20%;left:12px;pointer-events:auto" hidden><button id="duelFriends">Friends</button><button id="ownerWave" hidden>Wave</button><button id="atomicEmote" hidden>Atomic</button></div>
   <div id="publicHud" hidden>
     <div><strong>Open Meadow</strong><b id="fieldCount">—/50</b></div>
     <span id="fieldKills"></span><span id="fieldStatus"></span>
@@ -933,12 +953,13 @@ body.public-play #pcHint, body.touch #publicHint { display: none; }
     <button type="button" id="quickChatCancel" aria-label="Close quick chat">×</button>
   </form>
   <div id="publicHint" hidden></div>
-  <div id="pcHint">WASD Move <span>·</span> J Slap <span>·</span> E Spit <span>·</span> Shift Dodge <span>·</span> Q Nova</div>
+  <div id="pcHint">WASD Move <span>·</span> J Slap <span>·</span> Hold E to charge spit <span>·</span> F Jump <span>·</span> Shift Dodge <span>·</span> Q Nova</div>
 </div>
 
 <div id="touchControls" hidden>
   <div id="zoneL"></div><div id="stick"><div id="nub"></div></div>
   <div class="buttons">
+    <button class="ability" id="aJump" data-action="jump" aria-label="Jump"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="m6 17 10-10 10 10M16 8v18"/></svg><span>Jump</span><b></b></button>
     <button class="ability" id="aNova" data-action="nova" aria-label="Nova"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="m16 3 3 9 10 4-10 3-3 10-4-10-9-3 9-4z"/></svg><span>Nova</span><b></b></button>
     <button class="ability" id="aSpit" data-action="spit" aria-label="Spit"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M20 4c1 7 8 9 8 16a8 8 0 0 1-16 0c0-5 4-8 8-16ZM3 10h8m-9 6h6"/></svg><span>Spit</span><b></b></button>
     <button class="ability" id="aSlap" data-action="slap" aria-label="Slap"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="m10 27-5-10c-1-3 2-4 4-1l3 3V6c0-3 4-3 4 0v10-11c0-3 4-3 4 0v11-8c0-3 4-3 4 0v10l2-3c2-2 4 0 3 3l-3 8c-3 4-12 5-16 1Z"/></svg><span id="slapActionLabel">Slap</span><b></b></button>
@@ -955,7 +976,7 @@ body.public-play #pcHint, body.touch #publicHint { display: none; }
     <dl class="guide">
       <div><dt>Move <kbd>WASD</kbd></dt><dd>Strafe or close the gap. Use the left joystick on touch.</dd></div>
       <div><dt>Slap <kbd>J</kbd> or click</dt><dd>Chain three close-range slaps to launch your rival. Time a slap to send their spit back.</dd></div>
-      <div><dt>Spit <kbd>E</kbd> or right-click</dt><dd>Fire a glob from range. Pillars can catch it.</dd></div>
+      <div><dt>Spit <kbd>E</kbd> or right-click</dt><dd>Hold and release for a larger, faster glob. At full charge it tracks rivals. Dodge or slap it back.</dd></div>
       <div><dt>Dodge <kbd>Shift</kbd></dt><dd>Slip past a hit at the last second to power up your next slap.</dd></div>
       <div><dt>Nova <kbd>Q</kbd></dt><dd>When the gold meter fills, unleash a shockwave up close.</dd></div>
     </dl>
@@ -1059,7 +1080,7 @@ body.public-play #pcHint, body.touch #publicHint { display: none; }
 </div>
 <div id="friendsOverlay" class="overlay" hidden>
   <section class="modal" role="dialog" aria-modal="true" aria-labelledby="friendsTitle">
-    <h2 id="friendsTitle">Saved friends</h2><p>A saved room is joinable while your friend is hosting it.</p><div id="friendList"></div>
+    <h2 id="friendsTitle">Friends</h2><form id="friendForm" class="account-row"><label for="friendUsername">Slimo username</label><input id="friendUsername" required maxlength="16" autocomplete="off"><button>Add friend</button></form><div id="friendList"></div>
     <div class="modal-actions"><button data-close="friendsOverlay">Close</button></div>
   </section>
 </div>
@@ -1070,6 +1091,13 @@ body.public-play #pcHint, body.touch #publicHint { display: none; }
   </section>
 </div>
 <div id="toast" role="status" hidden></div>
+<div id="slimoImpact" aria-hidden="true"></div><div id="atomicFlash" aria-hidden="true"></div><div id="atomicCaption" hidden></div>
+<div id="accountGate"><section class="account-card" aria-labelledby="accountTitle">
+<h1 id="accountTitle">SLIMO</h1><p>Sign in to customize your slime, invite friends, and enter the arena.</p>
+<div id="googleSlot"></div>
+<form id="usernameForm" hidden><div class="account-row"><label for="newUsername">Unique username</label><input id="newUsername" minLength="3" maxLength="16" pattern="[A-Za-z0-9_]{3,16}" autocomplete="username" autocapitalize="off" spellcheck="false" required><button class="primary">Create account</button></div></form>
+<p id="accountStatus" role="status">Connecting to Slimo…</p><button id="retryGoogle" type="button">Retry sign-in</button>
+</section></div>
 <script>
 
 /**
@@ -1114,6 +1142,8 @@ const AUDIO_FILES = {
   "fight-music-2": "./fight-music-2.mp3"
 };
 </script>
+<script src="./slimo-account.js"></script>
+<script src="./slimo-cinematics.js"></script>
 <script>
 'use strict';
 
@@ -1134,7 +1164,7 @@ const palette = [
   { body: 0x855bc6, light: 0xdbbbff, dark: 0x4d3f8f, hud: '#b995ff' },
   { body: 0xd49936, light: 0xffdc88, dark: 0x98602d, hud: '#ffd16e' }
 ];
-const actions = ['slap', 'spit', 'dash', 'nova'];
+const actions = ['slap', 'spit', 'dash', 'nova', 'jump'];
 const coarse = matchMedia('(pointer:coarse)').matches || matchMedia('(hover:none) and (any-pointer:coarse)').matches;
 const prefersReduced = matchMedia('(prefers-reduced-motion:reduce)').matches;
 const ARENA_X = 29.6;
@@ -1201,7 +1231,7 @@ let chosen = profile.color;
 $('playerName').value = profile.name;
 document.body.classList.toggle('touch', coarse);
 
-function emptyButtons() { return { slap: 0, spit: 0, dash: 0, nova: 0 }; }
+function emptyButtons() { return { slap: 0, spit: 0, dash: 0, nova: 0, jump: 0 }; }
 function neutralInput(ready = true) {
   return { x: 0, z: 0, aim: null, assist: 0, a: emptyButtons(), ready };
 }
@@ -1245,7 +1275,7 @@ function closeOverlay(restoreFocus = true) {
   if (restoreFocus && focusBeforeOverlay?.getClientRects().length) focusBeforeOverlay.focus({ preventScroll: true });
 }
 function gameReady() {
-  return isLandscape() && !document.hidden && (!activeOverlay || (mode !== 'bot' && state.phase === 'over'));
+  return isLandscape() && !document.hidden && (mode==='public' || !atomicStarted) && (!activeOverlay || (mode !== 'bot' && state.phase === 'over'));
 }
 function buildSettings() {
   const body = $('setBody');
@@ -1474,7 +1504,7 @@ const moves = {
   ],
   spit: { duration: .441, contact: .176, damage: 11, speed: 28 },
   nova: { duration: .690, contact: .352, damage: 26, reach: 6.6 },
-  dash: { time: .242, inv: .168, perfect: .118, cooldown: .98, speed: 23 }
+  dash: { time: .268, inv: .214, perfect: .154, cooldown: .98, speed: 23 }
 };
 
 /* Shared by the browser and the open-room server. */
@@ -1530,10 +1560,10 @@ function cleanRoomChat(value) {
 /* Compact 20 Hz movement and projectile snapshots for the shared meadow. */
 const ROOM_CAP = 50;
 const MEADOW_ROOM = 'Open Meadow';
-const MEADOW_PROTOCOL = 2;
+const MEADOW_PROTOCOL = 3;
 const ROOM_INPUT = 54;
 const ROOM_STATE = 55;
-const MEADOW_ACTIONS = ['slap', 'spit', 'dash', 'nova'];
+const MEADOW_ACTIONS = actions;
 const PLAYER_BYTES = 33;
 const GLOB_BYTES = 22;
 const meleeFlag = { '': 0, slap: 1, spit: 2, nova: 3 };
@@ -1541,7 +1571,7 @@ const meleeName = ['', 'slap', 'spit', 'nova'];
 function wireNumber(n, lo, hi) { return Math.min(hi, Math.max(lo, Number.isFinite(n) ? n : 0)); }
 function wireAngle(n) { return Math.atan2(Math.sin(n || 0), Math.cos(n || 0)); }
 function inputPacket(input, sequence) {
-  const v = new DataView(new ArrayBuffer(22));
+  const v = new DataView(new ArrayBuffer(26));
   v.setUint8(0, ROOM_INPUT);
   v.setUint8(1, MEADOW_PROTOCOL);
   v.setUint8(2, input.ready ? 1 : 0);
@@ -1554,7 +1584,7 @@ function inputPacket(input, sequence) {
   return v.buffer;
 }
 function decodeRoomInput(buffer) {
-  if (buffer.byteLength !== 22) return null;
+  if (buffer.byteLength !== 26) return null;
   const v = new DataView(buffer);
   if (v.getUint8(0) !== ROOM_INPUT || v.getUint8(1) !== MEADOW_PROTOCOL) return null;
   const a = {};
@@ -3153,6 +3183,8 @@ function animateFighters(dt, time) {
     m.shadow.scale.setScalar(physicalSize + (ragY + p.air) * .11);
     m.shadow.material.opacity = .67 / (1 + (ragY + p.air) * .7);
     setFighterColor(m, p.color);
+    slimoLook(m,p,time);
+    if(ownerWave?.slot===i&&ownerWave.until>performance.now()&&p.owner) m.jelly.rotation.z+=Math.sin(time*19)*.22;
     const fire = skillRank(p, 'fire');
     if (isSpit && fire) m.fill.emissive.setHex(0xf05d25);
     else if (p.chill > 0) m.fill.emissive.setHex(0x258fc0);
@@ -3233,6 +3265,7 @@ function freshPlayer(slot, previous = {}) {
     guarded: false, secondUsed: false, lastVolley: -1, growth: 0,
     countering: false, combo: 0, comboLanded: false, lastDamage: '',
     active: previous.active ?? (slot === 0),
+    hat: previous.hat, accent: previous.accent, owner: previous.owner, spitCharge: 0,
     name: previous.name ?? (slot ? 'Rival' : profile.name),
     color: previous.color ?? (slot ? 1 : chosen)
   };
@@ -3240,7 +3273,7 @@ function freshPlayer(slot, previous = {}) {
 function freshMatch(format = 'classic') {
   return {
     p: [freshPlayer(0), freshPlayer(1)], score: [0, 0], phase: 'waiting', timer: ROUND_SECONDS,
-    wait: 0, round: 1, roundKey: 0, winner: -1, paused: false,
+    wait: 0, round: 1, roundKey: 0, duelMatch: 0, winner: -1, paused: false,
     bullets: [], fx: [], serial: 0, rematch: [false, false], format, run: format === 'rogue' ? newRun() : null
   };
 }
@@ -3252,7 +3285,7 @@ let queued = [{}, {}];
 function event(type, x, z, data = {}) {
   const fx = { id: ++state.serial, type, x, z, ...data };
   state.fx.push(fx);
-  if (['start', 'dash', 'slap', 'spit', 'splat', 'return', 'nova', 'hit', 'ko', 'perfect', 'pickup', 'skill', 'waveCue', 'wave'].includes(type)) networkDirty = true;
+  if (['atomic','ownerWave','start', 'dash', 'slap', 'spit', 'splat', 'return', 'nova', 'hit', 'ko', 'perfect', 'pickup', 'skill', 'waveCue', 'wave'].includes(type)) networkDirty = true;
   if (state.fx.length > 25) state.fx.shift();
   return fx;
 }
@@ -3279,6 +3312,7 @@ function startRound() {
   }
 }
 function restartMatch() {
+  state.duelMatch++;
   state.round = 1;
   state.score = [0, 0];
   state.rematch = [false, false];
@@ -3376,6 +3410,11 @@ function startMove(i, name) {
   const p = state.p[i], input = inputs[i];
   if (p.hp <= 0 || p.stun > 0 || p.dashTime > 0 || p.air > .1) return false;
   const aim = aimOf(p, input);
+  if (name === 'jump') {
+    if(p.attackTime>0 || p.vy>0) return false;
+    p.vy=6.4; p.air=.04;
+    return true;
+  }
   if (name === 'dash') {
     if (p.dash > 0 || (p.attackTime > 0 && (!p.struck || p.duration - p.attackTime < .20))) return false;
     const len = Math.hypot(input.x, input.z);
@@ -3414,7 +3453,10 @@ function startMove(i, name) {
     p.kz += Math.cos(aim) * amount;
     if (p.combo === 2 || p.countering) event('wind', p.x, p.z, { i, color: p.color, angle: aim, heavy: true });
   }
-  if (name === 'spit') event('chargeSpit', p.x, p.z, { i, color: p.color, angle: aim });
+  if (name === 'spit') {
+    p.spitCharge=clamp(input.spitCharge || 0,0,1);
+    event('chargeSpit',p.x,p.z,{i,color:p.color,angle:aim});
+  }
   if (name === 'nova') {
     p.en = 0;
     event('chargeNova', p.x, p.z, { i, color: p.color });
@@ -3425,12 +3467,12 @@ function reflectSpit(i) {
   const p = state.p[i];
   if (p.reflected) return;
   let candidate = null;
-  let best = 3.45;
+  let best = 4.55;
   for (const glob of state.bullets) {
     if (glob.owner === i || glob.returns >= 3) continue;
     const dx = glob.x - p.x, dz = glob.z - p.z;
     const d = Math.hypot(dx, dz);
-    if (d >= best || dx * glob.vx + dz * glob.vz >= 0 || Math.abs(angleDiff(p.attackAim, Math.atan2(dx, dz))) > 1.1) continue;
+    if (d >= best || dx * glob.vx + dz * glob.vz >= 0 || Math.abs(angleDiff(p.attackAim, Math.atan2(dx, dz))) > (glob.charged ? 1.72 : 1.36)) continue;
     candidate = glob;
     best = d;
   }
@@ -3461,7 +3503,7 @@ function resolveAttack(i, dt) {
   const age = p.duration - p.attackTime;
 
   const reflection = skillValue(p, 'return', 'window');
-  if (name === 'slap' && age >= p.contactTime - .036 - reflection && age <= p.contactTime + .067 + reflection) reflectSpit(i);
+  if (name === 'slap' && age >= p.contactTime - .105 - reflection && age <= p.contactTime + .14 + reflection) reflectSpit(i);
   if (!p.struck && age + 1e-6 >= p.contactTime) {
     p.struck = true;
     const rival = state.p[1 - i];
@@ -3474,7 +3516,7 @@ function resolveAttack(i, dt) {
       const heavy = p.combo === 2 || p.countering;
       p.kx += nx * move.lunge;
       p.kz += nz * move.lunge;
-      event('slap', p.x, p.z, { i, color: p.color, angle: p.attackAim, side: p.combo === 1 ? -1 : 1, heavy });
+      event('slap', p.x, p.z, { i, color: p.color, angle: p.attackAim, side: p.combo === 1 ? -1 : 1, heavy, combo:p.combo+1 });
       emitSkill(i, 'power');
       emitSkill(i, 'reach');
       emitSkill(i, 'tempo');
@@ -3510,11 +3552,13 @@ function resolveAttack(i, dt) {
       const bonus = skillValue(p, 'speed', 'damage');
       for (const [index, offset] of shots.entries()) {
         const heading = aim + offset;
-        const speed = move.speed + skillValue(p, 'speed', 'speed');
+        const charged = p.spitCharge >= .93;
+        const speed = move.speed + skillValue(p, 'speed', 'speed') + p.spitCharge * 24;
         state.bullets.push({
           id: ++state.serial, volley, owner: i, color: p.color, returns: 0, dodged: false,
-          x: spawnX, z: spawnZ, vx: Math.sin(heading) * speed, vz: Math.cos(heading) * speed, life: 1.48,
-          damage: (index ? skillValue(p, 'fork', 'sideDamage') : move.damage) + bonus,
+          charged, scale:1+p.spitCharge*.92,
+          x: spawnX, z: spawnZ, vx: Math.sin(heading) * speed, vz: Math.cos(heading) * speed, life: charged ? 5.5 : 1.48,
+          damage: (index ? skillValue(p, 'fork', 'sideDamage') : move.damage) + bonus + p.spitCharge * 13,
           fire: skillRank(p, 'fire'), frost: skillRank(p, 'frost'), seeker: skillRank(p, 'seeker'),
           cannon: skillRank(p, 'speed'), fork: skillRank(p, 'fork'), banks: skillValue(p, 'boomer', 'banks')
         });
@@ -3541,10 +3585,10 @@ function advanceBullets(dt) {
     const glob = state.bullets[index];
     const p = state.p[1 - glob.owner];
     const x = glob.x, z = glob.z;
-    if (glob.seeker && p.hp > 0 && !glob.dodged) {
+    if ((glob.seeker || glob.charged) && p.hp > 0 && !glob.dodged) {
       const heading = Math.atan2(glob.vx, glob.vz);
       const delta = angleDiff(heading, Math.atan2(p.x - x, p.z - z));
-      const turn = skills.seeker.levels[glob.seeker - 1].turn * Math.PI / 180 * dt;
+      const turn = (glob.charged ? 1650 : skills.seeker.levels[glob.seeker - 1].turn) * Math.PI / 180 * dt;
       const speed = Math.hypot(glob.vx, glob.vz);
       glob.vx = Math.sin(heading + clamp(delta, -turn, turn)) * speed;
       glob.vz = Math.cos(heading + clamp(delta, -turn, turn)) * speed;
@@ -3553,13 +3597,18 @@ function advanceBullets(dt) {
     glob.life -= dt;
     let obstacle = Infinity, pillar = null;
     for (const o of runCover()) {
-      const f = segmentCircle(x, z, nx, nz, o.x, o.z, o.r + .20);
+      const f = glob.charged ? Infinity : segmentCircle(x, z, nx, nz, o.x, o.z, o.r + .20);
       if (f < obstacle) { obstacle = f; pillar = o; }
     }
-    const impact = p.air > 1.45 || !p.active ? Infinity : segmentCircle(x, z, nx, nz, p.x, p.z, 1.18 * p.size);
+    const impact = (!glob.charged && p.air > 1.45) || !p.active ? Infinity : segmentCircle(x, z, nx, nz, p.x, p.z, (1.18+(glob.scale-1||0)*.46)*p.size);
     const brush = perfectWindow(p) && !glob.dodged ? segmentCircle(x, z, nx, nz, p.x, p.z, 1.73 * p.size) : Infinity;
-    if (brush < obstacle) {
+    if (brush < obstacle || (glob.charged && impact < obstacle && p.inv > 0)) {
       perfectDodge(1 - glob.owner);
+      if(glob.charged){
+        event('splat',x,z,{color:glob.color});
+        state.bullets.splice(index,1);
+        continue;
+      }
       glob.dodged = true;
     }
     if (impact < obstacle && p.inv <= 0 && p.hp > 0 && !glob.dodged) {
@@ -3660,7 +3709,7 @@ function advancePlayer(i, dt) {
       consumed[i][name] = count;
     }
   }
-  for (const name of ['dash', 'nova', 'slap', 'spit']) {
+  for (const name of ['dash', 'jump', 'nova', 'slap', 'spit']) {
     if (!queued[i][name]) continue;
     if (queued[i][name] < fightTime) {
       delete queued[i][name];
@@ -3989,6 +4038,14 @@ function showEffect(q) {
   const rotation = q.angle ?? 0;
   const height = .88 + (q.height || 0);
   switch (q.type) {
+    case 'atomic': {
+      const actor=q.i===0?slimoDuel?.host:q.i===1?slimoDuel?.guest:null;
+      if(mode!=='guest'||actor?.atomic) startAtomic();
+      break;
+    }
+    case 'ownerWave':
+      ownerWave={slot:q.i,until:performance.now()+1600};
+      break;
     case 'start':
       startBanner = .68;
       playSound('start');
@@ -4000,6 +4057,7 @@ function showEffect(q) {
     case 'slap':
       playSound('slap', q.x, q.z, q.heavy);
       swipe(q, q.playful ? 0xe1e8ac : colors.light);
+      if(!q.playful && local) slimoImpactFrame(q.combo||1,colors.hud);
       if (local && (mode !== 'public' || q.playful) && coarse) vibrate('swing');
       if (q.heavy) particles(q.x, .68, q.z, 12, 0xffcc87, 8.4, 2.1, .36, 'line', rotation);
       break;
@@ -4086,6 +4144,7 @@ function showEffect(q) {
         impactDebris(q.x, q.z, q.nx, q.nz);
         if (affected && !settings.reduced) impactTint = Math.max(impactTint, .51);
       }
+      if(q.chain && !q.finish) slimoImpactFrame(q.chain,colors.hud);
       if (!q.finish && !q.quiet) {
         const lines = q.source === 'fire' ? ['TOAST!', 'SIZZLE!', 'FWOOSH!', 'HOT!'] : spit ? ['SPLOT!', 'PLOP!', 'BLEH!', 'SPLAT!'] : ['WHAP!', 'PAF!', 'SMACK!', 'PLAP!'];
         if (q.heavy || q.returned || q.id % 3 !== 1) word(q, q.heavy ? 'KAPOW!' : lines[q.id % lines.length], spit && q.source !== 'fire' ? '#b7ffee' : '#ffe2a8');
@@ -4134,7 +4193,7 @@ function showEffect(q) {
       playSound('bounce', q.x, q.z);
       break;
     case 'ko':
-      beginKnockout(q);
+      if(!startSlimoFinish(q)) beginKnockout(q);
       break;
   }
 }
@@ -4199,6 +4258,7 @@ function clearFx(clearEvents = true) {
   }
   globModels.clear();
   if (clearEvents) {
+    slimoFinish=null; slimoImpact=null;
     lastEvent = 0;
     lastRoundKey = -1;
   }
@@ -4260,9 +4320,10 @@ function animateGlobs(dt, time) {
     const f = mode === 'guest' ? damp(49, dt) : 1;
     m.x += (q.x - m.x) * f;
     m.z += (q.z - m.z) * f;
-    const size = (q.returns ? 1.31 : 1) * (1 + (q.fire || 0) * .065);
+    const size = (q.scale || 1) * (q.returns ? 1.31 : 1) * (1 + (q.fire || 0) * .065);
     const wobble = Math.sin(time * 29 + q.id);
     m.group.position.set(m.x, .83 + wobble * .066, m.z);
+    if(q.charged) m.light.material.color.setHex(0xcca2ff);
     m.group.rotation.y = Math.atan2(q.vx, q.vz);
     m.group.scale.setScalar(size);
     m.blob.scale.set(.30 + wobble * .043, .32 - wobble * .025, .53 + wobble * .032 + (q.cannon || 0) * .05);
@@ -4693,9 +4754,21 @@ let stickPointer = null;
 let stickCenter = null;
 let joystick = { x: 0, z: 0 };
 let lastRepeat = { slap: -99, spit: -99 };
+let spitHold = null;
+let spitCharge = 0;
+function beginSpitHold() {
+  if(spitHold===null && mode!=='lobby' && state.phase==='fight' && gameReady()) spitHold=performance.now();
+}
+function releaseSpitHold() {
+  if(spitHold===null) return;
+  spitCharge=clamp((performance.now()-spitHold-130)/710,0,1);
+  spitHold=null;
+  trigger('spit');
+}
 let lastSafeHint = -Infinity;
 const stick = $('stick'), nub = $('nub'), zone = $('zoneL');
 function resetInputs() {
+  spitHold=null;
   keys.clear();
   held.clear();
   drag = null;
@@ -4720,7 +4793,7 @@ function trigger(action) {
   inputCounts[action]++;
   if (action === 'slap' || action === 'spit') lastRepeat[action] = clock;
   if (mode === 'guest') {
-    predictAttack(action);
+    if(action!=='jump') predictAttack(action);
     tickNet(performance.now(), true);
   } else if (mode === 'public') {
     predictPublicAttack(action);
@@ -4738,21 +4811,20 @@ function readInput() {
   return {
     x: ready ? (-g * right + f * forward) / magnitude : 0,
     z: ready ? (f * right + g * forward) / magnitude : 0,
-    aim: desired, assist: view.lock ? 1 : settings.assist, a: { ...inputCounts }, ready
+    aim: desired, assist: view.lock ? 1 : settings.assist, a: { ...inputCounts }, ready, spitCharge
   };
 }
 function repeatInput() {
   if (!settings.hold || state.phase !== 'fight' || !gameReady()) return;
   const p = mode === 'public' ? publicPose() : state.p[localSlot];
-  for (const name of ['slap', 'spit']) {
-    if (name === 'spit' && mode === 'public' && !roomCanFight()) continue;
+  for (const name of ['slap']) {
     const key = name === 'slap' ? keys.has('j') || keys.has(' ') : keys.has('e');
     if ((!key && !held.has(name)) || clock - lastRepeat[name] < .24 || p.attackTime > .095 || p.stun > .05 || p.dashTime > .08) continue;
     trigger(name);
   }
 }
 
-const KEY_ACTION = { j: 'slap', ' ': 'slap', e: 'spit', q: 'nova', shift: 'dash' };
+const KEY_ACTION = { j: 'slap', ' ': 'slap', e: 'spit', q: 'nova', shift: 'dash', f: 'jump' };
 const MOVE_KEYS = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
 addEventListener('keydown', event => {
   if (event.key === 'Escape' && !$('quickChatBar').hidden) { closeQuickChat(); event.preventDefault(); return; }
@@ -4783,9 +4855,17 @@ addEventListener('keydown', event => {
   if (key === 'r' && !event.repeat) lockOn(mode === 'public' ? !publicRoom.locked : !view.lock);
   if (MOVE_KEYS.includes(key) || KEY_ACTION[key]) event.preventDefault();
   keys.add(key);
-  if (!event.repeat && KEY_ACTION[key]) trigger(KEY_ACTION[key]);
+  if (!event.repeat && KEY_ACTION[key]) {
+    if(key==='e') beginSpitHold();
+    else trigger(KEY_ACTION[key]);
+  }
+  if(!event.repeat && key==='x') slimoActivateEmote('atomic');
 });
-addEventListener('keyup', event => keys.delete(event.key.toLowerCase()));
+addEventListener('keyup', event => {
+  const key=event.key.toLowerCase();
+  keys.delete(key);
+  if(key==='e') releaseSpitHold();
+});
 addEventListener('blur', resetInputs);
 canvas.addEventListener('contextmenu', event => event.preventDefault());
 canvas.addEventListener('pointerdown', event => {
@@ -4794,6 +4874,7 @@ canvas.addEventListener('pointerdown', event => {
   unlockAudio();
   drag = { id: event.pointerId, x: event.clientX, y: event.clientY, originX: event.clientX, originY: event.clientY, turned: false, at: performance.now() };
   canvas.setPointerCapture(event.pointerId);
+  if(event.pointerType==='mouse' && event.button===2) beginSpitHold();
 });
 canvas.addEventListener('pointermove', event => {
   if (drag?.id !== event.pointerId) return;
@@ -4815,7 +4896,10 @@ canvas.addEventListener('pointermove', event => {
 });
 function releaseDrag(event) {
   if (drag?.id !== event.pointerId) return;
-  if (event.type === 'pointerup' && !drag.turned && event.pointerType === 'mouse') trigger(event.button === 2 ? 'spit' : 'slap');
+  if(event.type==='pointerup' && event.pointerType==='mouse'){
+    if(event.button===2) releaseSpitHold();
+    else if(!drag.turned) trigger('slap');
+  }else if(event.type!=='pointerup') spitHold=null;
   drag = null;
 }
 for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.addEventListener(type, releaseDrag);
@@ -4865,12 +4949,24 @@ for (const button of document.querySelectorAll('.ability')) {
   button.addEventListener('pointerdown', event => {
     event.preventDefault();
     unlockAudio();
-    trigger(name);
+    if(name==='spit') beginSpitHold();
+    else trigger(name);
     held.add(name);
     button.setPointerCapture(event.pointerId);
   });
-  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) button.addEventListener(type, () => held.delete(name));
-  button.addEventListener('click', event => { if (event.detail === 0) trigger(name); });
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) button.addEventListener(type, () => {
+    if(name==='spit'){
+      if(type==='pointerup') releaseSpitHold();
+      else spitHold=null;
+    }
+    held.delete(name);
+  });
+  button.addEventListener('click', event => {
+    if(event.detail===0){
+      if(name==='spit') spitCharge=0;
+      trigger(name);
+    }
+  });
 }
 
 let resolutionScale = 1;
@@ -5021,6 +5117,12 @@ function banner() {
 }
 function drawHud() {
   if (mode === 'lobby') return;
+  const canEmote=['fight','round','over'].includes(state.phase);
+  $('duelTools').hidden = mode!=='host' && !slimoAccount?.owner && !slimoAccount?.atomic;
+  $('duelFriends').hidden=mode!=='host';
+  $('ownerWave').hidden=!canEmote || !slimoAccount?.owner || mode==='public';
+  $('atomicEmote').hidden=!canEmote || !slimoAccount?.atomic;
+  $('aSpit').style.setProperty('--charge',spitHold===null?'0%':(clamp((performance.now()-spitHold-130)/710,0,1)*100)+'%');
   healthCards();
   const self = state.p[localSlot], other = state.p[1 - localSlot];
   const seconds = Math.max(0, Math.ceil(state.timer));
@@ -5765,7 +5867,7 @@ function skillEffect(q) {
   }
 }
 
-const protocolTag = 4;
+const protocolTag = 5;
 const inputTag = 73;
 const motionTag = 77;
 const INPUT_MS = 33;
@@ -5798,7 +5900,7 @@ let localDashSoundAt = -Infinity;
 let attackPreview = null;
 
 function encodeInput(input, sequence) {
-  const buffer = new ArrayBuffer(22);
+  const buffer = new ArrayBuffer(26);
   const v = new DataView(buffer);
   v.setUint8(0, inputTag);
   v.setUint8(1, protocolTag);
@@ -5810,10 +5912,11 @@ function encodeInput(input, sequence) {
   const aim = Number.isFinite(input.aim) ? Math.atan2(Math.sin(input.aim), Math.cos(input.aim)) : null;
   v.setInt16(12, aim === null ? -32768 : Math.round(aim * 10000));
   actions.forEach((key, i) => v.setUint16(14 + i * 2, input.a[key] % 65536));
+  v.setUint8(24, Math.round(clamp(input.spitCharge || 0, 0, 1) * 255));
   return buffer;
 }
 function readFastInput(buffer) {
-  if (!(buffer instanceof ArrayBuffer) || buffer.byteLength !== 22) return;
+  if (!(buffer instanceof ArrayBuffer) || buffer.byteLength !== 26) return;
   const v = new DataView(buffer);
   if (v.getUint8(0) !== inputTag || v.getUint8(1) !== protocolTag) return;
   const seq = v.getUint32(4);
@@ -5828,7 +5931,7 @@ function readFastInput(buffer) {
     x: clamp(v.getInt16(8) / 16384, -1, 1),
     z: clamp(v.getInt16(10) / 16384, -1, 1),
     aim: aim === -32768 ? null : aim / 10000,
-    assist: v.getUint8(3) / 255, a, ready: remoteReady
+    assist: v.getUint8(3) / 255, a, ready: remoteReady, spitCharge: v.getUint8(24) / 255
   };
 }
 function packMotion() {
@@ -6118,7 +6221,8 @@ function readCommand(data) {
   inputs[1] = {
     x: axis(data.x), z: axis(data.z), a, ready: remoteReady,
     aim: Number.isFinite(data.aim) ? data.aim % TAU : null,
-    assist: Number.isFinite(data.assist) ? clamp(data.assist, 0, 1) : 0
+    assist: Number.isFinite(data.assist) ? clamp(data.assist, 0, 1) : 0,
+    spitCharge: Number.isFinite(data.spitCharge) ? clamp(data.spitCharge, 0, 1) : 0
   };
   if (seq) lastRemoteSequence = seq;
 }
@@ -6588,7 +6692,7 @@ const publicRoom = {
   models: new Map(), labels: new Map(), entry: 0, rtt: null,
   lastPing: 0, timeout: 0, lastKo: null, kills: 0
 };
-const roomOrigin = 'https://slimeoo-multiplayer.balochnajool.workers.dev';
+
 function roomUnavailable() {
   return location.protocol === 'file:' ? 'Start the Open Meadow server, then open the game at localhost:8080.' :
     'Open Meadow could not connect to Cloudflare. Check the multiplayer Worker deployment and GAME_ROOM binding.';
@@ -6601,7 +6705,7 @@ function displayRoomCount(count) {
 async function checkRoom() {
   const request = ++publicRoom.entry;
   try {
-    const response = await fetch(new URL('/api/room', roomOrigin), { cache: 'no-store', signal: AbortSignal.timeout(2800) });
+    const response = await fetch(new URL('/api/room', slimoWorker), { cache: 'no-store', signal: AbortSignal.timeout(2800) });
     if (!response.ok) throw Error('room');
     const data = await response.json();
     if (request !== publicRoom.entry || mode !== 'lobby') return;
@@ -6743,10 +6847,16 @@ function stopRoomVoice(all=false){
   document.addEventListener('visibilitychange',()=>{if(document.hidden)stopRoomVoice();});
 }
 
-function openPublicConnection() {
+async function openPublicConnection() {
   if (mode !== 'public' || document.hidden || meadowSuspended) return;
   const room = publicRoom;
-  const path = new URL('/room/OPEN-MEADOW', roomOrigin);
+  const entry=++room.entry;
+  let ticket;
+  try { ({ticket}=await slimoApi('meadow',{})); }
+  catch(error){ if(mode==='public'&&entry===room.entry) leave(error.message); return; }
+  if(mode!=='public'||entry!==room.entry||meadowSuspended||document.hidden) return;
+  const path = new URL('/room/OPEN-MEADOW', slimoWorker);
+  path.searchParams.set('ticket',ticket);
   path.protocol = path.protocol === 'https:' ? 'wss:' : 'ws:';
   let ws;
   try { ws = new WebSocket(path); }
@@ -6798,7 +6908,7 @@ function openPublicConnection() {
         players.set(p.id, {
           id: p.id, name: p.name.slice(0, 16), ranks, color: Number.isInteger(p.color) ? clamp(p.color, 0, 3) : 0,
           maxHp: 100 + skillValue({ ranks }, 'colossus', 'hp'), size: 1 + skillValue({ ranks }, 'colossus', 'size'),
-          wins: Number.isInteger(p.wins) ? Math.max(0, p.wins) : 0
+          wins: Number.isInteger(p.wins) ? Math.max(0, p.wins) : 0, hat:p.hat, accent:p.accent, owner:p.owner===true
         });
       }
       for (const id of room.roster.keys()) {
@@ -6820,6 +6930,8 @@ function openPublicConnection() {
         room.events.push(q);
       }
       if (room.events.length > 200) room.events.splice(0, room.events.length - 200);
+    } else if (packet.t === 'atomic') {
+      if(room.roster.has(packet.i)) startAtomic();
     } else if (packet.t === 'voiceSignal') {
       handleRoomVoiceSignal(packet);
     } else if (packet.t === 'chat') {
@@ -7048,7 +7160,7 @@ function animatePublic(dt, time) {
     room.history.push({ sequence: room.sequence + 1, input, dt: step });
     if (room.history.length > 40) room.history.shift();
   }
-  state.p[0] = { ...p, active: true };
+  state.p[0] = { ...p, active: true, hat:slimoAccount?.hat, accent:slimoAccount?.accent, owner:slimoAccount?.owner };
   sendRoomInput();
   const last = room.frames.at(-1);
   if (!last && now - room.updated > 3500 && !room.warnedSnapshot) {
@@ -7073,6 +7185,7 @@ function animatePublic(dt, time) {
         room.labels.set(id, label);
       }
       animateRoomFighter(model, roomPose(meta, pose), dt, time, id === room.target);
+      slimoLook(model,meta,time);
     }
   }
   roomEffects();
@@ -7305,7 +7418,7 @@ function publicSocialKey(event) {
 }
 
 const PROTOCOL = protocolTag;
-const ROOM_TYPE = 'slime-rome-draft-v4';
+const ROOM_TYPE = 'slimo-friend-duel-v5';
 let peer = null, link = null, roomId = '', netAttempt = 0;
 let peerTimer = 0, lastRemote = 0, lastSnapshot = 0;
 let remoteReady = true;
@@ -7331,6 +7444,7 @@ function clearPeer() {
   const currentLink = link, currentPeer = peer;
   link = peer = null;
   welcomed = false;
+  slimoDuel=slimoGuestGrant=null;
   currentLink?.close();
   currentPeer?.destroy();
 }
@@ -7363,10 +7477,11 @@ function dropRival(message = 'Your rival left. The room is still open.') {
   stopFastChannel();
   link = null;
   welcomed = false;
+  slimoDuel=null;
   former?.close();
   const own = state.p[0];
   state = freshMatch(state.format);
-  state.p[0] = freshPlayer(0, { name: own.name, color: own.color, active: true });
+  state.p[0] = freshPlayer(0, { ...own, active:true });
   state.p[1] = freshPlayer(1, { active: false });
   state.phase = 'waiting';
   state.paused = false;
@@ -7393,6 +7508,7 @@ function connect(type, target) {
   }
   const token = ++netAttempt;
   roomId = type === 'guest' ? target : '';
+  slimoDuel=null;
   welcomed = false;
   try { peer = new window.Peer(undefined, { debug: 0 }); }
   catch {
@@ -7402,12 +7518,14 @@ function connect(type, target) {
   peerTimer = setTimeout(() => {
     if (token === netAttempt && !welcomed) failConnection('The room service did not respond. Try again or play practice.');
   }, 18000);
-  peer.on('open', id => {
+  peer.on('open', async id => {
     if (token !== netAttempt) return;
     if (type === 'host') {
       clearTimeout(peerTimer);
       roomId = 'rome-' + id;
-      if (!link?.open) openShare();
+      try { await slimoApi('duel/open',{room:roomId}); }
+      catch(error){ if(token===netAttempt) failConnection(error.message); return; }
+      if(token===netAttempt && !link?.open) openShare();
     } else if (!link) {
       const connection = peer.connect(target.slice(5), { reliable: true, serialization: 'json', metadata: { game: ROOM_TYPE } });
       if (connection) attach(connection, false, token);
@@ -7447,6 +7565,8 @@ function connect(type, target) {
 function attach(connection, hostSide, token) {
   link = connection;
   lastRemote = lastSnapshot = performance.now();
+  let authorizing=false;
+  let rivalEmoteAt=-Infinity;
   const timeout = setTimeout(() => {
     if (token !== netAttempt || link !== connection || welcomed) return;
     if (hostSide) dropRival('Your rival’s connection timed out. The room is still open.');
@@ -7460,9 +7580,10 @@ function attach(connection, hostSide, token) {
     lastRemote = lastSnapshot = performance.now();
     if (hostSide) setupMotionChannel(connection, true, token);
     send({ t: 'hello', version: PROTOCOL, name: profile.name, color: chosen, ready: gameReady(),
-      motion: hostSide && watchedPeerConnection === connection.peerConnection && !!watchMotionChannel });
+      motion: hostSide && watchedPeerConnection === connection.peerConnection && !!watchMotionChannel,
+      pass: hostSide ? undefined : slimoGuestGrant?.pass });
   });
-  connection.on('data', packet => {
+  connection.on('data', async packet => {
     if (token !== netAttempt || link !== connection || !packet || typeof packet !== 'object') return;
     if (packet.t === 'full') return failConnection('This arena already has two players.');
     if (packet.t === 'version') return failConnection('Both players need the same Slime Circuit version.');
@@ -7481,18 +7602,32 @@ function attach(connection, hostSide, token) {
         } else failConnection('Both players need the Roguelike update of Slime Circuit.');
         return;
       }
-      if (welcomed) return;
+      if (welcomed || authorizing) return;
+      if(hostSide){
+        authorizing=true;
+        try {
+          const {id,guest}=await slimoApi('duel/accept',{pass:packet.pass,room:roomId});
+          if(token!==netAttempt||link!==connection) return;
+          slimoDuel={id,host:slimoAccount,guest};
+        } catch(error){
+          if(token===netAttempt && link===connection) dropRival(error.message);
+          return;
+        } finally {authorizing=false;}
+      }else{
+        if(!slimoGuestGrant?.host) return failConnection('This duel invite expired.');
+        slimoDuel={id:slimoGuestGrant.id,host:slimoGuestGrant.host,guest:slimoAccount};
+      }
       clearTimeout(timeout);
       clearTimeout(peerTimer);
       welcomed = true;
       const rival = state.p[hostSide ? 1 : 0];
-      rival.name = typeof packet.name === 'string' ? packet.name.trim().slice(0, 16) || 'Rival' : 'Rival';
-      rival.color = Number.isInteger(packet.color) ? clamp(packet.color, 0, 3) : 1;
+      const account=hostSide?slimoDuel.guest:slimoDuel.host;
+      Object.assign(rival,{name:account.username,color:account.color,hat:account.hat,accent:account.accent,owner:account.owner});
       rival.active = true;
       if (hostSide) {
         if (rival.color === chosen) rival.color = (chosen + 1) % 4;
         remoteReady = packet.ready !== false;
-        if (activeOverlay === 'shareOverlay') closeOverlay();
+        if (['shareOverlay','friendsOverlay'].includes(activeOverlay)) closeOverlay();
         restartMatch();
         state.paused = !gameReady() || !remoteReady;
         broadcastState();
@@ -7500,6 +7635,14 @@ function attach(connection, hostSide, token) {
       return;
     }
     if (!welcomed) return;
+    if(hostSide && packet.t==='slimoEmote' && ['fight','round','over'].includes(state.phase)) {
+      const now=performance.now(), rival=slimoDuel?.guest;
+      if(packet.key==='atomic' && rival?.atomic && now-rivalEmoteAt>=20000){
+        rivalEmoteAt=now; event('atomic',0,0,{i:1,color:rival.color}); broadcastState();
+      }else if(packet.key==='wave' && rival?.owner){
+        event('ownerWave',0,0,{i:1,color:rival.color}); broadcastState();
+      }
+    }
     if (hostSide && packet.t === 'input') {
       lastRemote = performance.now();
       readCommand(packet.v || {});
@@ -7526,7 +7669,7 @@ function attach(connection, hostSide, token) {
   connection.on('error', end);
 }
 const phases = ['waiting', 'countdown', 'fight', 'round', 'draft', 'over'];
-const eventTypes = ['start', 'wind', 'slap', 'chargeSpit', 'spit', 'splat', 'dash', 'perfect', 'return', 'chargeNova', 'nova', 'hit', 'land', 'ko', 'skill', 'waveCue', 'wave', 'pickup', 'hazard', 'burn'];
+const eventTypes = ['atomic','ownerWave','start', 'wind', 'slap', 'chargeSpit', 'spit', 'splat', 'dash', 'perfect', 'return', 'chargeNova', 'nova', 'hit', 'land', 'ko', 'skill', 'waveCue', 'wave', 'pickup', 'hazard', 'burn'];
 const validColor = n => Number.isInteger(n) && n >= 0 && n < palette.length;
 const validSlot = n => n === 0 || n === 1;
 const validPoint = p => p && Number.isFinite(p.x) && Number.isFinite(p.z) && Math.abs(p.x) < 100 && Math.abs(p.z) < 100;
@@ -7534,7 +7677,7 @@ function validSnapshot(s) {
   if (!s || !Array.isArray(s.p) || s.p.length !== 2 || !Array.isArray(s.score) || s.score.length !== 2 ||
       !Array.isArray(s.rematch) || s.rematch.length !== 2 || !Array.isArray(s.bullets) || s.bullets.length > 24 ||
       !Array.isArray(s.fx) || s.fx.length > 25 || !phases.includes(s.phase) || !Number.isInteger(s.roundKey) ||
-      !Number.isInteger(s.round) || s.round < 1 || ![-1, 0, 1].includes(s.winner) ||
+      !Number.isInteger(s.duelMatch) || s.duelMatch < 1 || !Number.isInteger(s.round) || s.round < 1 || ![-1, 0, 1].includes(s.winner) ||
       !Number.isFinite(s.timer) || !Number.isFinite(s.wait) || typeof s.paused !== 'boolean') return false;
   if (!['classic', 'rogue'].includes(s.format) ||
       !s.score.every(n => Number.isInteger(n) && n >= 0 && n <= (s.format === 'classic' ? 3 : 8)) ||
@@ -7560,7 +7703,7 @@ function validSnapshot(s) {
       ['x', 'z', 'r', 'vx', 'vz', 'kx', 'kz', 'air', 'vy', 'hp', 'maxHp', 'size', 'en', 'dash', 'dashTime', 'stun',
         'hit', 'attackTime', 'duration', 'contactTime', 'combo', 'chill', 'chillAmount', 'growth'].every(key => Number.isFinite(p[key])) &&
       p.maxHp >= 100 && p.maxHp <= 154 && p.size >= 1 && p.size <= 1.3 && ['', 'slap', 'spit', 'nova'].includes(p.attack))) return false;
-  if (!s.bullets.every(q => validPoint(q) && validColor(q.color) && validSlot(q.owner) && Number.isSafeInteger(q.id) &&
+  if (!s.bullets.every(q => validPoint(q) && (q.scale === undefined || Number.isFinite(q.scale) && q.scale>=1 && q.scale<=2) && (q.charged === undefined || typeof q.charged === 'boolean') && validColor(q.color) && validSlot(q.owner) && Number.isSafeInteger(q.id) &&
       [0, 1, 2, 3].includes(q.returns) && Number.isFinite(q.vx) && Number.isFinite(q.vz) &&
       ['fire', 'frost', 'seeker', 'fork', 'cannon'].every(k => [0, 1, 2, 3].includes(q[k] ?? 0)))) return false;
   return s.fx.every(q => {
@@ -7623,46 +7766,6 @@ async function shareInvite() {
     if (error.name !== 'AbortError') await copyInvite();
   }
 }
-function friends() {
-  const saved = readStore('slimeRomeFriends', []);
-  return Array.isArray(saved) ? saved.filter(p => p && typeof p.name === 'string' && typeof p.room === 'string' && parseRoom(p.room)).slice(0, 20) : [];
-}
-function saveRival() {
-  const rival = state.p[1 - localSlot];
-  if (!rival.active || !roomId || mode === 'bot') return;
-  const saved = friends().filter(person => person.name !== rival.name);
-  writeStore('slimeRomeFriends', [{ name: rival.name, room: roomId }, ...saved].slice(0, 20));
-  toast(rival.name + ' saved');
-}
-function openFriends() {
-  const list = $('friendList');
-  list.replaceChildren();
-  const saved = friends();
-  if (!saved.length) list.textContent = 'Save a rival after they join a friend duel.';
-  for (const person of saved) {
-    const row = document.createElement('div');
-    row.className = 'friend';
-    const name = document.createElement('span');
-    name.textContent = person.name;
-    const join = document.createElement('button');
-    join.textContent = 'Join room';
-    join.onclick = () => {
-      closeOverlay(false);
-      $('joinCode').value = person.room;
-      requestEnter('guest', person.room);
-    };
-    const remove = document.createElement('button');
-    remove.textContent = 'Remove';
-    remove.onclick = () => {
-      writeStore('slimeRomeFriends', friends().filter(p => p.name !== person.name));
-      openFriends();
-      list.querySelector('button')?.focus();
-    };
-    row.append(name, join, remove);
-    list.append(row);
-  }
-  openOverlay('friendsOverlay');
-}
 async function fullscreen(toggle = false) {
   if (document.fullscreenElement && toggle) {
     await document.exitFullscreen?.().catch(() => {});
@@ -7686,7 +7789,7 @@ function updateOrientation() {
   }
 }
 async function requestEnter(type, code = '', format = lobbyFormat) {
-  if (pending || mode !== 'lobby') return;
+  if (pending || mode !== 'lobby' || !slimoAccount?.username) return;
   unlockAudio();
   closeOverlay(false);
   profile = { name: $('playerName').value.trim().slice(0, 16) || 'Jade', color: chosen };
@@ -7695,14 +7798,22 @@ async function requestEnter(type, code = '', format = lobbyFormat) {
   const request = ++entryNonce;
   pending = { type, code, format, ready: false };
   updateOrientation();
-  await fullscreen();
+  const openScreen=fullscreen();
+  if(type==='guest'){
+    try { slimoGuestGrant=await slimoApi('duel/join',{room:code}); }
+    catch(error) {
+      if(request===entryNonce){pending=null;updateOrientation();setStatus(error.message);}
+      return;
+    }
+  }
+  await openScreen;
   if (request !== entryNonce || !pending) return;
   pending.ready = true;
   updateOrientation();
 }
 function prepareLobby() {
   state = freshMatch();
-  state.p[0] = Object.assign(freshPlayer(0), { x: 2.2, z: 2.1, r: .13 });
+  state.p[0] = Object.assign(freshPlayer(0,{hat:slimoAccount?.hat,accent:slimoAccount?.accent,owner:slimoAccount?.owner}), { x: 2.2, z: 2.1, r: .13 });
   state.p[1] = Object.assign(freshPlayer(1), { x: 4.16, z: -.45, r: -.61, active: true, color: (chosen + 1) % 4 });
   snapFighters();
   resetViewForRound();
@@ -7713,7 +7824,7 @@ function enter(type, code, format = lobbyFormat) {
   localSlot = type === 'guest' ? 1 : 0;
   stopFastChannel();
   state = freshMatch(type === 'guest' || type === 'public' ? 'classic' : format);
-  state.p[localSlot] = freshPlayer(localSlot, { active: true, name: profile.name, color: chosen });
+  state.p[localSlot] = freshPlayer(localSlot, { active:true, name:profile.name, color:chosen, hat:slimoAccount?.hat, accent:slimoAccount?.accent, owner:slimoAccount?.owner });
   if (type === 'public') Object.assign(state.p[0], { x: -24, z: 15, r: .7 });
   state.p[1 - localSlot].active = false;
   inputs = [neutralInput(), neutralInput()];
@@ -7794,11 +7905,13 @@ $('setReset').onclick = () => {
   lockOn(settings.autoLock);
   buildSettings();
 };
-$('friends').onclick = openFriends;
+$('friends').onclick = slimoOpenSocial;
+$('ownerWave').onclick=()=>slimoActivateEmote('wave');
+$('atomicEmote').onclick=()=>slimoActivateEmote('atomic');
 $('invite').onclick = openShare;
 $('copyInvite').onclick = copyInvite;
 $('shareInvite').onclick = shareInvite;
-$('addFriend').onclick = saveRival;
+$('addFriend').onclick = slimoOpenSocial;
 $('lock').onclick = () => lockOn(mode === 'public' ? !publicRoom.locked : !view.lock);
 $('fs').onclick = () => fullscreen(true);
 $('quit').onclick = $('cancelJoin').onclick = () => leave();
@@ -7947,9 +8060,14 @@ function frame(now) {
     shadowAt = now;
     renderer.shadowMap.needsUpdate = true;
   }
-  renderer.render(scene, camera);
+  drawSlimoFinish(now);
+  drawSlimoImpact(now);
+  const atomic=drawAtomic(now);
+  document.body.classList.toggle('atomic-playing',atomic);
+  if(!atomic) renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
+slimoInitAccount();
 requestAnimationFrame(frame);
 </script>
 </body>

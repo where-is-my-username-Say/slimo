@@ -1,14 +1,17 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "slimeoo-multiplayer",
+  "name": "slimo-meadow",
   "main": "worker.js",
-  "compatibility_date": "2026-11-14",
+  "compatibility_date": "2026-11-15",
+  "vars": {
+    "SLIMO_ORIGIN": "https://slimo-ten.vercel.app",
+    "WORKER_ORIGIN": "https://slimo-meadow.balochnajool.workers.dev"
+  },
   "durable_objects": {
     "bindings": [
-      { "name": "GAME_ROOM", "class_name": "GameRoom" }
+      { "name": "GAME_ROOM", "class_name": "GameRoom" },
+      { "name": "ACCOUNTS", "class_name": "SlimoAccounts" }
     ]
   },
-  "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["GameRoom"] }
-  ]
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom", "SlimoAccounts"] }]
 }
