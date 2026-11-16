@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#192e2d">
-<title>Slime Circuit · Open Meadow</title>
+<title>Slimo · Circuit de Rome</title>
 <style>
 /* Roboto, Copyright 2011 Google Inc.
 
@@ -892,6 +892,7 @@ body[data-impact-frame="negative"] #slimoImpact::before,body[data-impact-frame="
 #duelTools{z-index:11}
 #hud #duelTools button{font-size:12px;padding:7px 11px}
 </style>
+<link rel="stylesheet" href="./slimo-ui.css">
 </head>
 <body>
 <div id="stage" aria-label="Three-dimensional Roman arena"></div>
@@ -904,38 +905,49 @@ body[data-impact-frame="negative"] #slimoImpact::before,body[data-impact-frame="
 <div id="speechBubbles" aria-hidden="true"></div>
 
 <main id="lobby">
-  <section class="lobby-content" aria-labelledby="title">
-    <div class="brand"><span class="crest" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M6 25V14a10 10 0 0 1 20 0v11M12 25V14a4 4 0 0 1 8 0v11M3 25h26M4 8h24"/></svg></span> CIRCUIT DE ROME</div>
-    <h1 id="title">SLIME <em>CIRCUIT</em></h1>
-    <p class="intro">Build a slime. Pick a fight.</p>
-    <div class="profile">
-      <label class="sr-only" for="playerName">Slime name</label>
-      <input id="playerName" type="text" maxlength="16" autocomplete="off" placeholder="Name your slime">
-      <div class="swatches" role="group" aria-label="Slime color">
-        <button class="swatch" type="button" data-color="0" style="--swatch:#42c5a5" aria-label="Jade"></button>
-        <button class="swatch" type="button" data-color="1" style="--swatch:#f47867" aria-label="Coral"></button>
-        <button class="swatch" type="button" data-color="2" style="--swatch:#a784f0" aria-label="Violet"></button>
-        <button class="swatch" type="button" data-color="3" style="--swatch:#efba55" aria-label="Gold"></button>
+  <div class="lobby-content">
+    <header class="lobby-brand">
+      <div class="brand"><span class="crest" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M6 25V14a10 10 0 0 1 20 0v11M12 25V14a4 4 0 0 1 8 0v11M3 25h26M4 8h24"/></svg></span> CIRCUIT DE ROME</div>
+      <h1 id="title">SLIMO</h1>
+    </header>
+    <section class="lobby-deck" aria-labelledby="playTitle">
+      <h2 id="playTitle">Play</h2>
+      <div class="deck-section">
+        <label class="deck-label" for="playerName">Your slime</label>
+        <div class="profile">
+          <input id="playerName" type="text" maxlength="16" autocomplete="off" placeholder="Name your slime">
+          <div class="swatches" role="group" aria-label="Slime color">
+            <button class="swatch" type="button" data-color="0" style="--swatch:#42c5a5" aria-label="Jade"></button>
+            <button class="swatch" type="button" data-color="1" style="--swatch:#f47867" aria-label="Coral"></button>
+            <button class="swatch" type="button" data-color="2" style="--swatch:#a784f0" aria-label="Violet"></button>
+            <button class="swatch" type="button" data-color="3" style="--swatch:#efba55" aria-label="Gold"></button>
+          </div>
+        </div>
+        <div id="accountTools" hidden>
+          <div class="account-row"><strong id="accountName"></strong><span id="accountAward"></span><button id="slimoLogout" type="button">Sign out</button></div>
+          <div class="account-row look-row"><label for="slimeHat">Hat</label><select id="slimeHat"><option value="none">None</option><option value="crown">Crown</option><option value="halo">Halo</option><option value="horns">Horns</option></select>
+          <label for="slimeAccent">Accent</label><select id="slimeAccent"><option value="mint">Mint</option><option value="gold">Gold</option><option value="violet">Violet</option><option value="ice">Ice</option></select><button id="saveSlimoLook" type="button">Save look</button></div>
+        </div>
       </div>
-    </div>
-    <div id="accountTools" hidden>
-      <div class="account-row"><strong id="accountName"></strong><span id="accountAward"></span><button id="slimoLogout" type="button">Sign out</button></div>
-      <div class="account-row"><label for="slimeHat">Hat</label><select id="slimeHat"><option value="none">None</option><option value="crown">Crown</option><option value="halo">Halo</option><option value="horns">Horns</option></select>
-      <label for="slimeAccent">Accent</label><select id="slimeAccent"><option value="mint">Mint</option><option value="gold">Gold</option><option value="violet">Violet</option><option value="ice">Ice</option></select><button id="saveSlimoLook" type="button">Save look</button></div>
-    </div>
-    <div class="mode-select" role="group" aria-label="Game format">
-      <button id="rogueMode" type="button" aria-pressed="true">Roguelike run</button>
-      <button id="classicMode" type="button" aria-pressed="false">Classic duel</button>
-    </div>
-    <div class="entry-buttons"><button id="practice" class="primary">Practice duel <span aria-hidden="true">→</span></button><button id="host">Friend duel</button></div>
-    <div class="meadow-entry">
-      <button id="openMeadow" type="button"><strong>Join Meadow</strong><span id="publicCount">—/50</span></button>
-      <button id="practiceSetup" type="button">Practice setup</button>
-    </div>
-    <form id="joinForm" class="join-line"><label class="sr-only" for="joinCode">Invite link or room code</label><input id="joinCode" type="text" maxlength="1024" autocapitalize="off" spellcheck="false" autocomplete="off" placeholder="Invite link or room code"><button id="join">Join</button></form>
-    <p id="status" role="status"></p>
-    <div class="lobby-links"><button id="openGuide">How to play</button><button id="skillBook">Skills</button><button id="roomBuild">Meadow build</button><button id="friends">Friends</button><button id="openSet">Settings</button></div>
-  </section>
+      <div class="deck-section">
+        <div class="deck-label" id="formatLabel">Duel format</div>
+        <div class="mode-select" role="group" aria-labelledby="formatLabel">
+          <button id="rogueMode" type="button" aria-pressed="true">Roguelike run</button>
+          <button id="classicMode" type="button" aria-pressed="false">Classic duel</button>
+        </div>
+        <div class="entry-buttons"><button id="practice" class="primary">Practice duel <span aria-hidden="true">→</span></button><button id="host">Friend duel</button></div>
+        <div class="meadow-entry">
+          <button id="openMeadow" type="button"><strong>Join Open Meadow</strong><span id="publicCount">—/50</span></button>
+        </div>
+      </div>
+      <div class="deck-section">
+        <label class="deck-label" for="joinCode">Join by invite</label>
+        <form id="joinForm" class="join-line"><input id="joinCode" type="text" maxlength="1024" autocapitalize="off" spellcheck="false" autocomplete="off" placeholder="Invite link or room code"><button id="join">Join</button></form>
+        <p id="status" role="status"></p>
+        <nav class="lobby-links" aria-label="Lobby tools"><button id="practiceSetup" type="button">Practice setup</button><button id="openGuide">How to play</button><button id="skillBook">Skills</button><button id="roomBuild">Meadow build</button><button id="friends">Friends</button><button id="openSet">Settings</button></nav>
+      </div>
+    </section>
+  </div>
 </main>
 
 <div id="hud" hidden>
@@ -1121,6 +1133,7 @@ body[data-impact-frame="negative"] #slimoImpact::before,body[data-impact-frame="
 <div id="toast" role="status" hidden></div>
 <div id="slimoImpact" aria-hidden="true" hidden></div>
 <div id="accountGate"><section class="account-card" aria-labelledby="accountTitle">
+<div class="brand"><span class="crest" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M6 25V14a10 10 0 0 1 20 0v11M12 25V14a4 4 0 0 1 8 0v11M3 25h26M4 8h24"/></svg></span> CIRCUIT DE ROME</div>
 <h1 id="accountTitle">SLIMO</h1><p>Sign in to customize your slime, invite friends, and enter the arena.</p>
 <div id="googleSlot"></div>
 <form id="usernameForm" hidden><div class="account-row"><label for="newUsername">Unique username</label><input id="newUsername" minLength="3" maxLength="16" pattern="[A-Za-z0-9_]{3,16}" autocomplete="username" autocapitalize="off" spellcheck="false" required><button class="primary">Create account</button></div></form>
