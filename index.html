@@ -2898,16 +2898,63 @@ const skinGeometry = new T.LatheGeometry([
   [0, .04], [.44, .045], [.81, .08], [1.03, .15], [1.13, .26], [1.17, .43],
   [1.15, .64], [1.08, .85], [.99, 1.05], [.88, 1.23], [.72, 1.43],
   [.53, 1.58], [.30, 1.69], [.15, 1.73], [0, 1.75]
-].map(([x, y]) => new T.Vector2(x, y)), 44);
+].map(([x, y]) => new T.Vector2(x, y)), 64);
 const bellyGeometry = new T.CircleGeometry(.49, 44);
 bellyGeometry.rotateX(Math.PI / 2);
 bellyGeometry.translate(0, .042, 0);
 const ink = new T.MeshBasicMaterial({ color: 0x130f1b, side: T.BackSide, toneMapped: false });
-const eyeDark = standard(0x251a33, { roughness: .38 });
+const gelInk = new T.MeshBasicMaterial({ color: 0x142322, side: T.BackSide, toneMapped: false });
+const gelDetail = texture(256, 256, (ctx, width, height) => {
+  const random = seeded(744821);
+  const depth = ctx.createLinearGradient(0, height, 0, 0);
+  depth.addColorStop(0, '#a6a6a6');
+  depth.addColorStop(.23, '#d0d0d0');
+  depth.addColorStop(.64, '#f4f4f4');
+  depth.addColorStop(1, '#fff');
+  ctx.fillStyle = depth;
+  ctx.fillRect(0, 0, width, height);
+  for (let i = 0; i < 65; i++) {
+    const x = random() * width;
+    const y = height * (.18 + random() * .72);
+    const radius = .65 + Math.pow(random(), 2.6) * 3.7;
+    for (const cx of [x - width, x, x + width]) {
+      if (cx + radius < 0 || cx - radius > width) continue;
+      const bubble = ctx.createRadialGradient(cx - radius * .26, y - radius * .27, 0, cx, y, radius);
+      bubble.addColorStop(0, '#fff9');
+      bubble.addColorStop(.38, '#fffa');
+      bubble.addColorStop(.70, '#6664');
+      bubble.addColorStop(1, '#6660');
+      ctx.fillStyle = bubble;
+      ctx.fillRect(cx - radius, y - radius, radius * 2, radius * 2);
+    }
+  }
+});
+
+function addGelScattering(shader) {
+  shader.fragmentShader = shader.fragmentShader.replace('#include <emissivemap_fragment>', `
+    #include <emissivemap_fragment>
+    vec3 gelView = normalize(vViewPosition);
+    float gelFacing = clamp(dot(normal, gelView), 0.0, 1.0);
+    float gelEdge = pow(1.0 - gelFacing, 2.2);
+    float gelBacklight = 0.0;
+    #if NUM_DIR_LIGHTS > 0
+      gelBacklight = max(dot(-gelView, directionalLights[0].direction), 0.0);
+    #endif
+    totalEmissiveRadiance += diffuseColor.rgb * gelEdge * (0.11 + 0.40 * gelBacklight);
+  `).replace('gl_FragColor = vec4( outgoingLight, diffuseColor.a );', `
+    // A broad, sky-facing reflection complements the sharp direct-light clearcoat.
+    vec3 gelReflected = inverseTransformDirection(reflect(-gelView, normal), viewMatrix);
+    float skyBand = smoothstep(-0.13, 0.32, gelReflected.y);
+    outgoingLight += vec3(0.62, 0.78, 0.87) * skyBand * (0.021 + gelEdge * 0.23);
+    gl_FragColor = vec4( outgoingLight, diffuseColor.a );
+  `);
+}
+
+const eyeDark = standard(0x251a33, { roughness: .27 });
 const white = standard(0xffefd5, { roughness: .51, emissive: 0x634653, emissiveIntensity: .2 });
 const sparkle = new T.MeshBasicMaterial({ color: 0xfff6dc, toneMapped: false });
 const mouthMat = new T.MeshBasicMaterial({ color: 0x271528, toneMapped: false });
-const cheekMat = standard(0xf18782, { roughness: .74 });
+const cheekMat = standard(0xc97772, { roughness: .56 });
 const tongueMat = standard(0xeb627a, { roughness: .46 });
 const goldMat = standard(0xeaa64e, { roughness: .37, metalness: .24, emissive: 0x99471a, emissiveIntensity: .19 });
 const paleGold = standard(0xffcf75, { roughness: .39, metalness: .19, emissive: 0x954a21, emissiveIntensity: .14 });
@@ -2929,8 +2976,8 @@ function ellipsoid(parent, material, x, y, z, sx, sy, sz, geo = sphere) {
   m.scale.set(sx, sy, sz);
   return m;
 }
-function outline(part, scale) {
-  const m = addMesh(part.geometry, ink, part);
+function outline(part, scale, material = ink) {
+  const m = addMesh(part.geometry, material, part);
   m.scale.setScalar(scale);
   return m;
 }
@@ -2948,31 +2995,18 @@ function makeFighter(index) {
   tilt.add(jelly);
   jelly.add(face);
 
-  const fill = standard(0xffffff, { roughness: .28, metalness: .05, emissive: 0x102945, emissiveIntensity: .26 });
-  fill.onBeforeCompile = shader => {
-    shader.fragmentShader = shader.fragmentShader.replace('#include <emissivemap_fragment>', [
-      '#include <emissivemap_fragment>',
-      'float glaze=pow(1.0-clamp(dot(normal,normalize(vViewPosition)),0.,1.),2.4);',
-      'totalEmissiveRadiance+=diffuseColor.rgb*(.06+glaze*.38);',
-      'totalEmissiveRadiance+=vec3(.08,.065,.145)*glaze;'
-    ].join('\n'));
-  };
-  const highlight = new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .66, depthWrite: false, toneMapped: false });
+  const fill = new T.MeshPhysicalMaterial({
+    color: 0xffffff, map: gelDetail, roughness: .25, metalness: 0,
+    clearcoat: .82, clearcoatRoughness: .19,
+    emissive: 0x102945, emissiveIntensity: .19
+  });
+  fill.onBeforeCompile = addGelScattering;
   const body = addMesh(skinGeometry, fill, jelly);
   body.castShadow = true;
   body.receiveShadow = true;
   addMesh(bellyGeometry, fill, jelly);
-  const shell = outline(body, 1.041);
-  shell.position.y = -.021;
-
-  const glint = ellipsoid(jelly, highlight, -.40, 1.51, .53, .25, .069, .023);
-  glint.rotation.set(-.70, -.38, .29);
-  const bead = ellipsoid(jelly, highlight, -.62, 1.37, .64, .066, .043, .017, smallSphere);
-  bead.rotation.y = -.46;
-  const backGlint = ellipsoid(jelly, highlight, .43, 1.43, -.57, .23, .056, .026);
-  backGlint.rotation.set(.62, -.38, -.21);
-  const backBead = ellipsoid(jelly, highlight, .65, 1.30, -.66, .062, .043, .018, smallSphere);
-  backBead.rotation.y = -.48;
+  const shell = outline(body, 1.014, gelInk);
+  shell.position.y = -.008;
 
   const eyes = [];
   for (const side of [-1, 1]) {
@@ -3035,22 +3069,20 @@ function makeFighter(index) {
     shoulder.position.set(side * .83, .62, .03);
     jelly.add(shoulder);
     const limb = ellipsoid(shoulder, fill, side * .24, 0, 0, .37, .158, .178);
-    outline(limb, 1.10);
+    outline(limb, 1.038, gelInk);
     const palm = new T.Group();
     palm.position.set(side * .56, 0, 0);
     shoulder.add(palm);
     const hand = ellipsoid(palm, fill, 0, 0, 0, .267, .253, .143);
-    outline(hand, 1.09);
-    const palmSpot = ellipsoid(palm, highlight, -.027 * side, .035, .125, .118, .094, .028, smallSphere);
-    palmSpot.rotation.z = side * .18;
+    outline(hand, 1.036, gelInk);
     for (let f = 0; f < 3; f++) {
       const digit = ellipsoid(palm, fill, (f - 1) * .138, .192 + (f === 1 ? .034 : 0), .015, .088, .145, .085, smallSphere);
       digit.rotation.z = (1 - f) * .14;
-      outline(digit, 1.10);
+      outline(digit, 1.045, gelInk);
     }
     const thumb = ellipsoid(palm, fill, -side * .235, .014, .041, .098, .139, .091, smallSphere);
     thumb.rotation.z = side * .56;
-    outline(thumb, 1.11);
+    outline(thumb, 1.05, gelInk);
     arms.push({ side, shoulder, palm });
   }
 
@@ -3065,7 +3097,7 @@ function makeFighter(index) {
     map: shadeTexture, color: 0x25162a, transparent: true, opacity: .66, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3
   }), scene, 0, .024 + .002 * index, 0);
   shadow.rotation.x = -Math.PI / 2;
-  return { root, tilt, jelly, face, fill, highlight, eyes, mouth, smile, pout, tongue, teeth, arms, crown, shadow, dizzy,
+  return { root, tilt, jelly, face, fill, eyes, mouth, smile, pout, tongue, teeth, arms, crown, shadow, dizzy,
     x: 0, z: 0, yaw: 0, inkColor: -1, bob: 0, hopPhase: 0, wobble: 0, wobbleSpeed: 0, hitX: 0, hitZ: 0, rag: null };
 }
 const fighters = [makeFighter(0), makeFighter(1)];
@@ -3074,7 +3106,6 @@ function setFighterColor(m, index) {
   const color = palette[index] || palette[0];
   m.fill.color.setHex(color.body);
   m.fill.emissive.setHex(color.dark);
-  m.highlight.color.setHex(color.light);
   m.inkColor = index;
 }
 function snapFighters() {
@@ -3230,7 +3261,7 @@ function animateFighters(dt, time) {
     if (isSpit && fire) m.fill.emissive.setHex(0xf05d25);
     else if (p.chill > 0) m.fill.emissive.setHex(0x258fc0);
     else m.fill.emissive.setHex(palette[p.color].dark);
-    m.fill.emissiveIntensity = isSpit && fire ? .30 + puff * fire * .26 : p.hit > .08 ? .50 : isNova ? .34 + flex * .56 : .26;
+    m.fill.emissiveIntensity = isSpit && fire ? .30 + puff * fire * .26 : p.hit > .08 ? .50 : isNova ? .34 + flex * .56 : .19;
 
     const rival = state.p[1 - i];
     const glance = mode === 'lobby' ? -.14 : clamp(angleDiff(m.yaw, Math.atan2(rival.x - p.x, rival.z - p.z)) * .26, -.24, .24);
@@ -4492,7 +4523,10 @@ function animateWords(dt) {
 const crowdBodyGeo = new T.LatheGeometry([
   [0,.04],[.65,.08],[1.03,.18],[1.14,.43],[1.08,.76],[.93,1.09],[.72,1.36],[.42,1.57],[0,1.71]
 ].map(([x, y]) => new T.Vector2(x, y)), 24);
-const crowdFills = palette.map(p => standard(p.body, { roughness: .37, emissive: p.dark, emissiveIntensity: .29 }));
+const crowdFills = palette.map(p => new T.MeshPhysicalMaterial({
+  color: p.body, roughness: .33, clearcoat: .55, clearcoatRoughness: .26,
+  emissive: p.dark, emissiveIntensity: .22
+}));
 const crowdEyeWhite = new T.MeshBasicMaterial({ color: 0xfff7df, toneMapped: false });
 const crowdEyeBlack = new T.MeshBasicMaterial({ color: 0x24172d, toneMapped: false });
 const crowdGlow = new T.MeshBasicMaterial({ color: 0xc9edb6, transparent: true, opacity: .54, depthWrite: false });
@@ -4507,12 +4541,12 @@ function makeRoomFighter(p, pose) {
   const fill = crowdFills[p.color];
   const body = addMesh(crowdBodyGeo, fill, jelly);
   body.castShadow = false;
-  outline(body, 1.042);
+  outline(body, 1.018, gelInk);
   const arms = [];
   for (const s of [-1, 1]) {
     const arm = addMesh(roomGeo, fill, jelly, s * 1.11, .60, .045);
     arm.scale.set(.28, .21, .27);
-    outline(arm, 1.09);
+    outline(arm, 1.045, gelInk);
     arms.push(arm);
     ellipsoid(jelly, crowdEyeWhite, s * .31, 1.09, .91, .17, .209, .093, roomGeo);
     ellipsoid(jelly, crowdEyeBlack, s * .31, 1.086, .985, .084, .128, .042, roomGeo);
