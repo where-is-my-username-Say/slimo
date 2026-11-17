@@ -1,0 +1,20 @@
+const AUDIO_FILES = {
+  "meadow-music": "./meadow-music.mp3",
+  "smack-a": "./smack-a.mp3",
+  "smack-b": "./smack-b.mp3",
+  "smack-c": "./smack-c.mp3",
+  "smack-d": "./smack-d.mp3",
+  "swing": "./swing.mp3",
+  "dodge": "./dodge.mp3",
+  "splat": "./splat.mp3",
+  "spit-fx": "./spit-fx.mp3",
+  "landing": "./landing.mp3",
+  "nova-fx": "./nova-fx.mp3",
+  "knockout": "./knockout.mp3",
+  "upgrade-fx": "./upgrade-fx.mp3",
+  "perfect-fx": "./perfect-fx.mp3",
+  "start-fx": "./start-fx.mp3",
+  "tick-fx": "./tick-fx.mp3",
+  "fight-music-1": "./fight-music-1.mp3",
+  "fight-music-2": "./fight-music-2.mp3"
+};

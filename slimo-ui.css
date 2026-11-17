@@ -112,6 +112,20 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 #accountName { overflow-wrap: anywhere; }
 #accountAward { color: var(--brass); }
 #slimoLogout { margin-inline-start: auto; }
+.sound-check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.sound-check p { flex: 1; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+#soundToggle[aria-pressed="false"], #battleSound[aria-pressed="false"] { color: var(--brass); }
+@media (pointer: coarse) {
+  .lobby-links button, .sound-check button, .modal-actions button { min-height: 44px; }
+  .swatch { min-width: 40px; min-height: 44px; }
+}
 #accountTools .look-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) auto; }
 #accountTools button { font-size: 11px; min-height: 32px; padding: 4px 8px; }
 #accountTools label { font-size: 11px; color: var(--muted); }
@@ -223,6 +237,43 @@ body:has(#accountGate:not([hidden])) #lobby { visibility: hidden; }
 #touchControls #aSpit { color: #bdf6e0; background: #22534af2; }
 #touchControls #aNova.ready { color: #fff3ca; background: #815221; border-color: var(--brass); }
 #touchControls .ability b { background: #132319ec; }
+
+#meadowMagic {
+  position:absolute;left:50%;bottom:max(54px,env(safe-area-inset-bottom));transform:translateX(-50%);
+  width:min(540px,68vw);padding:8px;border:1px solid #c4b8f16b;border-radius:12px;background:#14231ef0;
+  pointer-events:auto;box-shadow:0 6px 25px #07110b77;
+}
+.magic-topline { display:flex;align-items:center;gap:10px;font-size:11px; }
+.magic-topline strong { color:#d7c6ff;text-transform:uppercase;letter-spacing:.12em; }
+#manaLabel { color:#d8d3f6;margin-inline-start:auto; }
+#spellBuild { padding:3px 8px;min-height:25px;font-size:11px; }
+#manaMeter { height:3px;background:#594a693f;border-radius:4px;overflow:hidden;margin:6px 0; }
+#manaMeter i { display:block;height:100%;width:100%;background:linear-gradient(90deg,#938be1,#d8c9ff); }
+#spellSlots { display:flex;gap:5px;overflow-x:auto;overscroll-behavior:contain;scrollbar-width:thin;touch-action:pan-x; }
+#spellSlots button {
+  flex:1 0 54px;position:relative;display:grid;place-content:center;gap:3px;min-height:53px;padding:5px 4px;
+  border-color:var(--spell);border-bottom:3px solid var(--spell);border-radius:7px;color:var(--paper);
+  background:linear-gradient(145deg,#344538,#1c2c26);font-size:9px;line-height:1.1;white-space:normal;
+}
+#spellSlots button strong { max-width:55px;font-size:10px;font-weight:700; }
+#spellSlots button span { color:var(--spell);font-size:9px; }
+#spellSlots button kbd { position:absolute;top:2px;left:4px;color:#c7d5c6;font-size:8px; }
+#spellSlots button:disabled { opacity:.48; }
+#meadowMapPanel {
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(330px,72vw);
+  max-height:78vh;overflow:auto;padding:12px;border:1px solid #a6c99180;border-radius:13px;background:#14251af7;
+  box-shadow:0 12px 45px #07110b99;pointer-events:auto;
+}
+#meadowMapCanvas { display:block;width:100%;height:auto;border-radius:8px; }
+#meadowLocation { margin:8px 0;color:var(--muted);font-size:11px;line-height:1.4; }
+#meadowMapPanel button { min-height:36px; }
+#ringCompass { position:absolute;top:27%;left:50%;transform:translateX(-50%);padding:6px 12px;border-radius:20px;background:#14251aeb;color:#f5d39c;font-size:12px; }
+@media (pointer:coarse) {
+  #meadowMagic { width:min(40vw,390px);bottom:max(48px,env(safe-area-inset-bottom));padding:6px; }
+  #spellSlots button { flex-basis:54px;min-height:48px; }
+  #spellBuild { min-height:30px; }
+  #meadowMagic .magic-topline { font-size:10px;gap:4px; }
+}
 
 @media (orientation: portrait), (max-width: 710px) {
   #lobby, body.meadow #lobby {

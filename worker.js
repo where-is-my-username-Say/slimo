@@ -1,6 +1,9 @@
 import { DurableObject } from 'cloudflare:workers';
 export { SlimoAccounts } from './accounts.mjs';
-const CAP=50, PROTOCOL=3, INPUT=54, STATE=55, PLAYER_BYTES=33;
+import './slimo-world.js';
+import { MeadowCombat } from './slimo-meadow-combat.js';
+const WORLD = globalThis.SlimoWorld;
+const CAP=50, PROTOCOL=WORLD.protocol, INPUT=54, STATE=55, PLAYER_BYTES=WORLD.playerBytes, GLOB_BYTES=22;
 const EMOTES=['none','dance','sit','wave','spin','bounce'];
 const EMOTE_DURATION_MS=[0,0,0,1650,1150,1450];
 const cors={ 'Access-Control-Allow-Origin':'*', 'Access-Control-Allow-Methods':'GET, OPTIONS', 'Content-Type':'application/json' };
@@ -8,24 +11,7 @@ const response=(data,status=200)=>new Response(JSON.stringify(data),{status,head
 const bounded=(v,lo,hi)=>Math.min(hi,Math.max(lo,Number.isFinite(v)?v:0));
 const wrap=a=>Math.atan2(Math.sin(a),Math.cos(a));
 const send=(ws,p)=>{try{ws.send(JSON.stringify(p));}catch{}};
-const BUILD_SKILLS = [
-  "colossus", "armor", "second", "anchor", "leech", "guard",
-  "power", "reach", "tempo", "finisher", "echo", "return",
-  "fire", "frost", "fork", "seeker", "speed", "boomer",
-  "swift", "phase", "counter", "battery", "wide", "after"
-];
-function cleanBuild(raw) {
-  const ranks = {};
-  let remaining = 12;
-  for (const key of BUILD_SKILLS) {
-    const rank = Number.isInteger(raw?.[key]) ? Math.max(0, Math.min(3, raw[key], remaining)) : 0;
-    if (rank) {
-      ranks[key] = rank;
-      remaining -= rank;
-    }
-  }
-  return ranks;
-}
+const cleanBuild = raw => WORLD.cleanBuild(raw);
 
 export class GameRoom extends DurableObject {
   constructor(ctx,env){
@@ -33,7 +19,7 @@ export class GameRoom extends DurableObject {
     for(const ws of ctx.getWebSockets()){
       try { ws.close(1012,'Meadow restarted'); } catch {}
     }
-    this.loop=null;
+    this.loop=null; this.combat=new MeadowCombat(this.players);
   }
   roster(){return [...this.players.values()].filter(p=>p.joined).map(p=>({id:p.id,name:p.name,color:p.color,ranks:p.ranks,wins:p.wins||0,hat:p.profile.hat,accent:p.profile.accent,owner:p.profile.owner}));}
   broadcast(data){const raw=JSON.stringify(data);for(const p of this.players.values())if(p.joined)try{p.ws.send(raw);}catch{}}
@@ -47,6 +33,7 @@ export class GameRoom extends DurableObject {
     const pair=new WebSocketPair(),[client,server]=Object.values(pair);
     const taken=new Set(this.players.keys()); let id=1;while(taken.has(id)&&id<=65535)id++;
     const p={id,profile,opened:Date.now(),vy:0,atomicAt:0,name:'Slime',color:0,ranks:{},wins:0,joined:false,x:0,z:0,r:0,vx:0,vz:0,kx:0,kz:0,hp:100,en:0,seq:0,hasInput:false,inputAt:0,ready:false,actions:[0,0,0,0,0],attack:'',attackTime:0,duration:0,contactTime:0,dashTime:0,dash:0,air:0,stun:0,shield:0,emote:0,emoteAge:0,emoteUntil:0,chatAt:0};
+    this.combat.prepare(p);
     server.binaryType='arraybuffer';
     server.serializeAttachment({id});this.ctx.acceptWebSocket(server);this.players.set(id,{...p,ws:server});
     if(this.loop===null)this.loop=setInterval(()=>this.tick(),50);
@@ -63,6 +50,7 @@ export class GameRoom extends DurableObject {
       const advance = (seq - p.seq) >>> 0;
       if (p.hasInput && (advance === 0 || advance >= 0x80000000)) return;
       const firstInput = !p.hasInput;
+      p.spitCharge = v.getUint8(24)/255;
       p.seq = seq;
       p.hasInput = true;
       p.inputAt = Date.now();
@@ -73,16 +61,7 @@ export class GameRoom extends DurableObject {
         const count=v.getUint16(14+i*2);if(count===p.actions[i])continue;
         p.actions[i]=count;
         if(firstInput || !p.ready) continue;
-        if(i===0&&!p.attack){p.attack='slap';p.attackTime=.33;p.duration=.33;p.contactTime=.14;}
-        if(i===1&&!p.attack){p.attack='spit';p.attackTime=.48;p.duration=.48;p.contactTime=.2;}
-        if(i===2&&p.dash<=0){
-          const length = Math.hypot(p.ix, p.iz);
-          p.dashTime=.2;p.dash=1.1;
-          p.kx=(length>.12?p.ix/length:-Math.sin(p.aim))*15;
-          p.kz=(length>.12?p.iz/length:-Math.cos(p.aim))*15;
-        }
-        if(i===4&&p.air<=0.01&&p.dashTime<=0)p.vy=6.4;
-        if(i===3&&p.en>=100){p.en=0;p.attack='nova';p.attackTime=.7;p.duration=.7;p.contactTime=.35;}
+        this.combat.startMove(p,['slap','spit','dash','nova','jump'][i]);
       }
       return;
     }
@@ -102,14 +81,17 @@ export class GameRoom extends DurableObject {
         send(ws,{t:'error',message:'Open Meadow is full.'});this.leave(ws);return;
       }
       p.joined=true;p.name=p.profile.username;p.color=p.profile.color;
-      p.ranks=cleanBuild(m.ranks);
+      p.ranks=cleanBuild(m.ranks);this.combat.prepare(p);
       p.x=-24+(Math.random()-.5)*5;p.z=15+(Math.random()-.5)*5;
       send(ws,{t:'joined',id:p.id,players:this.roster().length,roster:this.roster()});
       this.broadcast({t:'roster',players:this.roster().length,roster:this.roster()});
     }else if(!p.joined)return;
     else if(m.t==='ping'&&Number.isFinite(m.stamp))send(ws,{t:'pong',stamp:m.stamp});
-    else if(m.t==='build'){
-      p.ranks=cleanBuild(m.ranks);
+    else if(m.t==='cast'){
+      send(ws,{t:'castResult',key:typeof m.key==='string'?m.key:'',...this.combat.cast(p,m.key)});
+    }else if(m.t==='build'){
+      if(WORLD.insideRing(p.x,p.z)||p.hp<=0){send(ws,{t:'build',ok:false,message:'Leave the fight ring before changing your build.'});return;}
+      p.ranks=cleanBuild(m.ranks);p.maxHp=100+([18,36,54][p.ranks.colossus-1]||0);p.size=1+([.10,.19,.29][p.ranks.colossus-1]||0);p.hp=Math.min(p.hp,p.maxHp);
       send(ws,{t:'build',ok:true});this.broadcast({t:'roster',players:this.roster().length,roster:this.roster()});
     }else if(m.t==='chat'){
       const now=Date.now();if(now-p.chatAt<750){send(ws,{t:'chatWait'});return;}
@@ -131,7 +113,7 @@ export class GameRoom extends DurableObject {
       }
       if(m.key==='playSlap'){
         p.emote=p.emoteAge=p.emoteUntil=0;
-        p.attack='slap';p.attackTime=.3;p.duration=.3;p.contactTime=.12;
+        this.combat.startMove(p,'slap');
         return;
       }
       const next=m.key==='random'?1+Math.floor(Math.random()*(EMOTES.length-1)):EMOTES.indexOf(m.key);
@@ -145,42 +127,44 @@ export class GameRoom extends DurableObject {
   tick(){
     for(const p of this.players.values())if(!p.joined&&Date.now()-p.opened>8000)this.leave(p.ws);
     const players=[...this.players.values()].filter(p=>p.joined);if(!players.length)return;
-    const dt=.05;this.tickNumber=(this.tickNumber+1)>>>0;
-    for(const p of players){
-      if(p.air>0||p.vy>0){p.air=Math.max(0,p.air+p.vy*dt);p.vy=p.air>0?p.vy-17*dt:0;}
-      p.dash=Math.max(0,p.dash-dt);p.dashTime=Math.max(0,p.dashTime-dt);
-      p.attackTime=Math.max(0,p.attackTime-dt);if(!p.attackTime)p.attack='';
-      if(p.emote){p.emoteAge+=dt;if((p.emoteUntil&&Date.now()>=p.emoteUntil)||Math.hypot(p.ix||0,p.iz||0)>.1){p.emote=0;p.emoteAge=0;}}
-      const activeInput = p.ready && Date.now() - p.inputAt < 1000;
-      const ix=activeInput?p.ix||0:0,iz=activeInput?p.iz||0:0,len=Math.max(1,Math.hypot(ix,iz));
-      const targetX=ix/len*7.35,targetZ=iz/len*7.35;
-      const factor=1-Math.exp(-19*dt);
-      p.vx+=(targetX-p.vx)*factor;p.vz+=(targetZ-p.vz)*factor;
-      p.x=bounded(p.x+(p.vx+p.kx)*dt,-90,90);p.z=bounded(p.z+(p.vz+p.kz)*dt,-90,90);
-      p.kx*=Math.exp(-12.5*dt);p.kz*=Math.exp(-12.5*dt);
-      if(p.ready&&!p.attack)p.r=p.aim||0;
-    }
-    const data=new ArrayBuffer(12+players.length*PLAYER_BYTES),v=new DataView(data);
-    v.setUint8(0,STATE);v.setUint8(1,PROTOCOL);v.setUint32(2,this.tickNumber);v.setUint32(6,0);v.setUint8(10,players.length);v.setUint8(11,0);
+    this.tickNumber=(this.tickNumber+1)>>>0;
+    this.combat.tick(.05,Date.now());
+    const bullets=this.combat.bullets;
+    const data=new ArrayBuffer(12+players.length*PLAYER_BYTES+bullets.length*GLOB_BYTES),v=new DataView(data);
+    v.setUint8(0,STATE);v.setUint8(1,PROTOCOL);v.setUint32(2,this.tickNumber);v.setUint32(6,0);v.setUint8(10,players.length);v.setUint8(11,bullets.length);
     let o=12;const num=(at,n,scale)=>v.setInt16(at,Math.round(bounded(n*scale,-32767,32767)));
     const timer=(at,n)=>v.setUint8(at,Math.round(bounded(n,0,2.55)*100));
     for(const p of players){
       v.setUint16(o,p.id);num(o+2,p.x,100);num(o+4,p.z,100);num(o+6,wrap(p.r),10000);
       num(o+8,p.vx,300);num(o+10,p.vz,300);num(o+12,p.kx,300);num(o+14,p.kz,300);
       v.setUint16(o+16,Math.round(p.hp*10));v.setUint8(o+18,Math.round(p.en));
-      v.setUint8(o+19,({slap:1,spit:2,nova:3}[p.attack]||0));
+      const guard=p.ranks.guard>0&&!p.guarded;
+      v.setUint8(o+19,({slap:1,spit:2,nova:3}[p.attack]||0)|(p.combo&3)<<2|(p.counterUntil>this.combat.time?16:0)|(p.respawnAt?32:0)|(p.hit>0?64:0)|(guard?128:0));
       timer(o+20,p.attackTime);timer(o+21,p.duration);timer(o+22,p.contactTime);
-      timer(o+23,p.dashTime);timer(o+24,p.air);timer(o+25,p.dash);
-      timer(o+26,p.stun);timer(o+27,0);v.setUint8(o+28,0);v.setUint8(o+29,0);
-      v.setUint8(o+30,p.emote||0);v.setUint16(o+31,Math.round((p.emoteAge%40)*1000));o+=PLAYER_BYTES;
+      timer(o+23,p.dashTime);timer(o+24,p.air);timer(o+25,p.dash);timer(o+26,p.stun);timer(o+27,p.chill);
+      v.setUint8(o+28,Math.round(bounded(p.chillAmount,0,1)*100));v.setUint8(o+29,p.burnTicks||0);
+      v.setUint8(o+30,(p.emote||0)|(!p.attackArmed?8:0));v.setUint16(o+31,Math.round((p.emoteAge%40)*1000));
+      v.setUint8(o+33,Math.round(p.mana));o+=PLAYER_BYTES;
     }
+    for(const q of bullets){
+      v.setUint32(o,q.id);v.setUint16(o+4,q.owner);num(o+6,q.x,100);num(o+8,q.z,100);num(o+10,q.vx,300);num(o+12,q.vz,300);
+      for(const [i,key] of ['color','fire','frost','seeker','cannon','returns','fork'].entries())v.setUint8(o+14+i,q[key]||0);
+      v.setUint8(o+21,(q.charged?1:0)|(q.rock?2:0));o+=GLOB_BYTES;
+    }
+    const events=this.combat.events.splice(0);
     // The player payload is identical for every recipient. Only the input ACK differs.
     for (const receiver of players) {
       if (receiver.ws.readyState !== 1 || (receiver.ws.bufferedAmount ?? 0) >= 262144) continue;
       const snapshot = data.slice(0);
       new DataView(snapshot).setUint32(6, receiver.seq);
-      try { receiver.ws.send(snapshot); } catch {}
+      try {
+        receiver.ws.send(snapshot);
+        const nearby=events.filter(q=>q.i===receiver.id||q.j===receiver.id||Math.hypot(q.x-receiver.x,q.z-receiver.z)<65);
+        if(nearby.length)send(receiver.ws,{t:'fx',events:nearby.slice(-90)});
+        if(this.tickNumber%2===0)send(receiver.ws,this.combat.snapshot(receiver));
+      } catch {}
     }
+    if(this.combat.rosterDirty){this.combat.rosterDirty=false;this.broadcast({t:'roster',players:this.roster().length,roster:this.roster()});}
   }
   webSocketClose(ws){this.leave(ws);}webSocketError(ws){this.leave(ws);}
   leave(ws){const id=ws.deserializeAttachment()?.id;if(this.players.get(id)?.ws===ws&&this.players.delete(id))this.broadcast({t:'roster',players:this.roster().length,roster:this.roster()});try{ws.close();}catch{}if(!this.players.size&&this.loop!==null){clearInterval(this.loop);this.loop=null;}}

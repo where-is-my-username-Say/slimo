@@ -1,24 +1,10 @@
-Based on commit bd365db8f27e6fb0c41e3922bf81903a63d4a1f4.
+See CHANGES.md for this pass, its verification and its limitations.
 
-Changes include input and action validation, equal directional dodge impulse,
-build validation, less repeated snapshot encoding, username concurrency checks,
-voice permission cancellation and connection limits, and activation of fight
-music during user gestures. Keyboard and pointer gestures can resume audio.
+Run with Node.js 24 or newer:
+  npm run check
+  npm test
 
-Run regression checks with Node.js 24 or newer:
-  node --test tests/regressions.test.mjs
-
-14 checks passed. A local 50-player mocked-server tick benchmark measured
-approximately 2.3 times faster ticks. This is not a browser FPS measurement.
-
-Browser audio playback and real two-player multiplayer have not been verified.
-Graphify returned backend source at the base revision but could not ground the
-audio query. Audio changes were derived from the matching repository checkout.
-
-Known unresolved issue: Open Meadow has attack animations but no server damage,
-projectile or knockout simulation. This package does not implement that missing
-combat engine. It does not claim to fix every issue in the game.
-
-These files have not been pushed or deployed. GitHub rejected publishing with
-403 Resource not accessible by integration. Review and deploy using the existing
-README instructions. The Worker changes require a separate Worker deployment.
+The slime model and basic fight implementation are preserved. New sounds,
+audio recovery, mute/test controls, input/accessibility repairs and frontend
+optimizations are included. No Worker changes or deployment are required to
+review the source. Live gameplay requires the existing configured services.
