@@ -109,7 +109,7 @@ async function slimoRefreshSocial() {
     $('friends').textContent=data.notifications.length ? 'Friends (' + data.notifications.length + ')' : 'Friends';
     $('duelFriends').textContent=$('friends').textContent;
     const notice = data.notifications.find(item=>!slimoNoticeIds.has(item.id));
-    data.notifications.forEach(item=>slimoNoticeIds.add(item.id));
+    slimoNoticeIds = new Set(data.notifications.map(item=>item.id));
     if(notice) toast(notice.kind==='duel' ? notice.username + ' invited you to duel. Open Friends.' : 'Beat the Owner · Atomic unlocked');
     if(activeOverlay==='friendsOverlay') slimoRenderSocial(data);
   } catch { /* The next poll retries. */ }

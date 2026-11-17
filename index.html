@@ -6405,6 +6405,16 @@ function mixTrack(info, level, now) {
   gain.gain.setTargetAtTime(level, now, .20);
   if (!level) info.fadeTimer = setTimeout(() => track.pause(), 1000);
 }
+function primeMusic() {
+  // Activate each media element during the gesture, before countdowns or network waits.
+  for (const info of audio.tracks.values()) {
+    if (!info.track.paused || info.starting) continue;
+    info.starting = true;
+    info.track.play().then(() => {
+      if (!info.level) info.track.pause();
+    }).catch(() => {}).finally(() => { info.starting = false; });
+  }
+}
 function unlockAudio() {
   try {
     const Audio = window.AudioContext || window.webkitAudioContext;
@@ -6436,6 +6446,7 @@ function unlockAudio() {
     }
     if (settings.music > 0 && settings.vol > 0 && !audio.tracks.size) prepareMusic();
     refreshAudio();
+    primeMusic();
   } catch { /* Audio is optional for unsupported browsers. */ }
 }
 function ringHasRival() {
@@ -6822,7 +6833,7 @@ function disconnectRoom() {
 
 // Room-only push-to-talk. Audio is WebRTC peer-to-peer; the Worker relays
 // signaling only. A maximum of four nearby listeners prevents 50-way mesh load.
-const roomVoice = {stream:null,peers:new Map(),held:false,starting:false};
+const roomVoice = {stream:null,peers:new Map(),held:false,starting:false,generation:0};
 const voiceIce = {iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
 function voiceSend(to,data){
   const ws=publicRoom.ws;
@@ -6841,17 +6852,19 @@ function voicePeer(id){
   };
   pc.onconnectionstatechange=()=>{
     if(['closed','failed','disconnected'].includes(pc.connectionState)){
-      pc._voiceAudio?.remove();pc.close();roomVoice.peers.delete(id);
+      pc._voiceAudio?.remove();pc.close();
+      if (roomVoice.peers.get(id) === pc) roomVoice.peers.delete(id);
     }
   };
   return pc;
 }
 async function handleRoomVoiceSignal(packet){
-  if(mode!=='public'||!publicRoom.id||!Number.isInteger(packet.from)||packet.from===publicRoom.id)return;
+  if(mode!=='public'||!publicRoom.id||!Number.isInteger(packet.from)||packet.from===publicRoom.id||!publicRoom.roster.has(packet.from))return;
   const id=packet.from,data=packet.data;
   if(!data||typeof data!=='object')return;
   try{
     if(data.kind==='offer'){
+      if (!roomVoice.peers.has(id) && roomVoice.peers.size >= 4) return;
       const pc=voicePeer(id);
       await pc.setRemoteDescription({type:'offer',sdp:data.sdp});
       await pc.setLocalDescription(await pc.createAnswer());
@@ -6872,13 +6885,19 @@ async function startRoomVoice(event){
   event?.preventDefault();
   if(mode!=='public'||!publicRoom.id||roomVoice.held||roomVoice.starting)return;
   roomVoice.starting=true;
+  const generation = ++roomVoice.generation;
+  const entry = publicRoom.entry;
   const btn=$('fieldMic');
   try{
     if(!navigator.mediaDevices?.getUserMedia)throw Error('Microphone requires HTTPS and browser permission.');
     const stream=await navigator.mediaDevices.getUserMedia({audio:{
       echoCancellation:true,noiseSuppression:true,autoGainControl:true
     },video:false});
-    if(mode!=='public'){stream.getTracks().forEach(t=>t.stop());return;}
+    if (mode !== 'public' || document.hidden || generation !== roomVoice.generation ||
+        entry !== publicRoom.entry || !publicRoom.id) {
+      stream.getTracks().forEach(track => track.stop());
+      return;
+    }
     roomVoice.stream=stream;roomVoice.held=true;btn.classList.add('talking');setText(btn,'Talking');
     // Prefer nearby listeners, with a strict four-peer ceiling.
     const latest=publicRoom.frames.at(-1)?.poses;
@@ -6889,6 +6908,7 @@ async function startRoomVoice(event){
       .sort((a,b)=>a.dist-b.dist).slice(0,4);
     for(const {id} of candidates){
       if(!roomVoice.held)break;
+      if (!roomVoice.peers.has(id) && roomVoice.peers.size >= 4) continue;
       const pc=voicePeer(id);
       stream.getTracks().forEach(track=>pc.addTrack(track,stream));
       await pc.setLocalDescription(await pc.createOffer());
@@ -6898,6 +6918,7 @@ async function startRoomVoice(event){
   finally{roomVoice.starting=false;}
 }
 function stopRoomVoice(all=false){
+  roomVoice.generation++;
   roomVoice.held=false;
   roomVoice.stream?.getTracks().forEach(t=>t.stop());
   roomVoice.stream=null;
@@ -6924,6 +6945,7 @@ function stopRoomVoice(all=false){
 async function openPublicConnection() {
   if (mode !== 'public' || document.hidden || meadowSuspended) return;
   const room = publicRoom;
+  if (room.ws && room.ws.readyState < 2) return;
   const entry=++room.entry;
   let ticket;
   try { ({ticket}=await slimoApi('meadow',{})); }
@@ -7032,7 +7054,8 @@ function roomPose(meta, p) {
 }
 function receiveRoomState(packet) {
   const room = publicRoom;
-  if (packet.tick <= room.lastTick) return;
+  const advance = (packet.tick - room.lastTick) >>> 0;
+  if (room.lastTick >= 0 && (advance === 0 || advance >= 0x80000000)) return;
   const now = performance.now();
   const poses = new Map(packet.players.map(p => [p.id, p]));
   const current = poses.get(room.id), meta = room.roster.get(room.id);
@@ -7070,7 +7093,6 @@ function receiveRoomState(packet) {
   room.prediction = simulated;
   state.p[0] = { ...simulated, active: true };
   if (current.hp > 0) room.lastKo = null;
-  state.p[0] = authoritative;
 }
 function predictPublicAttack(attack) {
   const room = publicRoom, p = room.prediction;
@@ -7154,6 +7176,8 @@ function sendRoomInput(force = false) {
 }
 function dropRoomModel(id) {
   const room = publicRoom;
+  const pc = roomVoice.peers.get(id);
+  if (pc) { pc.close(); pc._voiceAudio?.remove(); roomVoice.peers.delete(id); }
   room.models.delete(id);
   room.labels.get(id)?.remove();
   room.labels.delete(id);
@@ -8026,10 +8050,13 @@ if (inviteCode) {
   setStatus('Choose your slime and tap Join.');
 }
 updateSwatches();
-document.addEventListener('click', () => {
+function resumeAudioFromGesture() {
   const track = audio?.tracks.get(audio.selection);
-  if (audio?.ctx.state !== 'running' || (track?.level && track.track.paused)) unlockAudio();
-});
+  if (!audio || audio.ctx.state !== 'running' || (track?.level && track.track.paused)) unlockAudio();
+}
+document.addEventListener('pointerdown', resumeAudioFromGesture);
+document.addEventListener('keydown', resumeAudioFromGesture);
+document.addEventListener('click', resumeAudioFromGesture);
 addEventListener('resize', () => {
   resizeView();
   updateOrientation();

@@ -135,6 +135,7 @@ export class SlimoAccounts extends DurableObject {
       if(!USERNAME.test(name)) fail('Use 3–16 letters, numbers or underscores.');
       if(p.username) fail('Your username is already set.',409);
       this.store.transactionSync(()=>{
+        if(this.player(p.id)?.username) fail('Your username is already set.',409);
         if(this.one('SELECT id FROM players WHERE username=?',name)) fail('That username is taken.',409);
         this.run('UPDATE players SET username=? WHERE id=?',name,p.id);
       });
