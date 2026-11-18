@@ -1,4 +1,6 @@
 import './slimo-world.js';
+import './slimo-air-combat.js';
+const AIR=globalThis.SlimoAirCombat;
 
 const W = globalThis.SlimoWorld;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, Number.isFinite(v) ? v : 0));
@@ -21,6 +23,7 @@ export class MeadowCombat {
   constructor(players = new Map()) {
     this.players = players; this.time = 0; this.serial = 0; this.now = Date.now(); this.waves = [];
     this.events = []; this.bullets = []; this.effects = []; this.rosterDirty = false;
+    this.airApi={canHarm:(p,t)=>this.canHarm(p,t,p.airArmed!==false),emit:(...args)=>this.emit(...args),hit:(...args)=>this.hit(...args)};
     this.coverGrid = new Map();
     for (const c of W.cover) {
       const key = Math.floor(c.x / 16) + ':' + Math.floor(c.z / 16);
@@ -31,7 +34,7 @@ export class MeadowCombat {
   prepare(p) {
     Object.assign(p, { maxHp: 100 + stat(p,'colossus','hp'), size: 1 + stat(p,'colossus','size'),
       mana: p.mana ?? 100, cooldowns: p.cooldowns || {}, castAt: p.castAt ?? -Infinity,
-      inv: 0, burnTicks: 0, burnClock: 0, chill: 0, chillAmount: 0, hit: 0, shield: 0,
+      airMove:0,airCharge:0,airStruck:false,suplex:null,suplexTime:0,grabTime:0,inv: 0, burnTicks: 0, burnClock: 0, chill: 0, chillAmount: 0, hit: 0, shield: 0,
       respawnAt: 0, guarded: false, secondUsed: false, combo: 0, chainUntil: 0, counterUntil: 0 });
     p.hp = p.maxHp;
     return p;
@@ -56,10 +59,12 @@ export class MeadowCombat {
     return list;
   }
   startMove(p, name) {
-    if (!this.active(p) || p.stun > 0 || p.respawnAt || p.dashTime > 0) return false;
+    if (!this.active(p) || p.stun > 0 || p.respawnAt || p.dashTime > 0 || p.suplex) return false;
+    if(name==='slap'&&(p.air>.1||p.vy>0)){p.airArmed=W.insideRing(p.x,p.z);return AIR.begin(p,(...args)=>this.emit(...args));}
+    if(p.airMove)return false;
     if (name === 'jump') {
       if (p.air > .01 || p.attack) return false;
-      p.vy = 6.4; p.air = .04; return true;
+      return AIR.jump(p,(...args)=>this.emit(...args));
     }
     if (name === 'dash') {
       if (p.dash > 0 || p.attack && (!p.struck || p.duration-p.attackTime < .20)) return false;
@@ -71,7 +76,7 @@ export class MeadowCombat {
       p.kz = (length > .12 ? p.iz/length : -Math.cos(p.aim || 0)) * 23;
       this.emit('dash',p.x,p.z,{i:p.id,color:p.color,angle:p.r}); return true;
     }
-    if (p.attack || p.air > .1 || !['slap','spit','nova'].includes(name)) return false;
+    if (p.attack || p.air > .1&&name!=='spit' || !['slap','spit','nova'].includes(name)) return false;
     if (name === 'nova' && (!W.insideRing(p.x,p.z) || p.en < 100)) return false;
     if (name === 'slap') p.combo = this.time < p.chainUntil ? (p.combo+1)%3 : 0;
     const duration = name === 'slap' ? [.352,.378,.58][p.combo] : name === 'spit' ? .441 : .690;
@@ -100,6 +105,7 @@ export class MeadowCombat {
     let damage = Math.max(1,Math.round(amount*(1-stat(target,'armor','cut'))));
     if (!target.guarded && rank(target,'guard')) { damage = Math.max(1,Math.round(damage*(1-stat(target,'guard','cut')))); target.guarded = true; }
     const dx = target.x-source.x, dz = target.z-source.z, distance = Math.hypot(dx,dz) || 1;
+    AIR.cancel(target);
     target.hp = Math.max(0,target.hp-damage); target.hit = .27; target.stun = Math.max(target.stun || 0,options.stun ?? .1);
     const shove = power*(1-stat(target,'anchor','cut'));
     target.kx += dx/distance*shove; target.kz += dz/distance*shove;
@@ -125,6 +131,8 @@ export class MeadowCombat {
       vz:nz*(28+stat(p,'speed','speed')),life:2.1,damage,color:p.color,fire:rank(p,'fire'),frost:rank(p,'frost'),
       seeker:rank(p,'seeker'),returns:0,cannon:rank(p,'speed'),fork:0,banks:stat(p,'boomer','banks'),
       charged:p.spitCharge>=.99,armed:W.insideRing(p.x,p.z),...extra});
+    const q=this.bullets[this.bullets.length-1],target=[...this.players.values()].filter(t=>t!==p&&this.alive(t)).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];
+    AIR.aimSpit(q,p,target);
   }
   resolve(p) {
     if (!p.attack || p.struck || p.duration-p.attackTime+1e-6 < p.contactTime) return;
@@ -177,11 +185,12 @@ export class MeadowCombat {
     if(p.attack!=='slap'||p.reflected)return;
     const age=p.duration-p.attackTime, window=stat(p,'return','window');
     if(age<p.contactTime-.105-window||age>p.contactTime+.14+window)return;
-    const q=this.bullets.find(q=>q.owner!==p.id&&q.returns<3&&Math.hypot(q.x-p.x,q.z-p.z)<4.55&&
+    const q=this.bullets.find(q=>q.owner!==p.id&&q.returns<3&&Math.abs((q.y??.83)-(p.air||0)-.83)<1.35&&Math.hypot(q.x-p.x,q.z-p.z)<4.55&&
       (q.x-p.x)*q.vx+(q.z-p.z)*q.vz<0&&Math.abs(wrap(Math.atan2(q.x-p.x,q.z-p.z)-p.attackAim))<1.36);
     if(!q)return;
     q.owner=p.id;q.color=p.color;q.returns++;q.damage=15+q.returns+stat(p,'return','damage');q.life=1.45;
     q.armed=q.armed&&W.insideRing(p.x,p.z);q.vx=Math.sin(p.attackAim)*(34+q.returns*2);q.vz=Math.cos(p.attackAim)*(34+q.returns*2);
+    const target=[...this.players.values()].find(t=>t.id!==p.id&&this.alive(t));AIR.aimSpit(q,p,target);
     q.hitTargets=new Set();p.reflected=true;p.en=clamp(p.en+19*stat(p,'battery','energy',1),0,100);
     this.emit('return',q.x,q.z,{i:p.id,color:p.color,angle:p.attackAim});
   }
@@ -251,21 +260,22 @@ export class MeadowCombat {
           Math.hypot(a.x-q.x,a.z-q.z)-Math.hypot(b.x-q.x,b.z-q.z))[0];
         if (target) { const a=Math.atan2(q.vx,q.vz), turn=wrap(Math.atan2(target.x-q.x,target.z-q.z)-a),
           rate=q.charged?2.5:stat(p,'seeker','turn')*Math.PI/180,
-          heading=a+clamp(turn,-rate*dt,rate*dt), speed=Math.hypot(q.vx,q.vz); q.vx=Math.sin(heading)*speed;q.vz=Math.cos(heading)*speed; }
+          heading=a+clamp(turn,-rate*dt,rate*dt), speed=Math.hypot(q.vx,q.vz);const flight=Math.max(.08,Math.hypot(target.x-q.x,target.z-q.z)/speed);q.vy=(q.vy||0)+(clamp((target.air+.83-(q.y??.83))/flight,-45,45)-(q.vy||0))*Math.min(1,dt*8); q.vx=Math.sin(heading)*speed;q.vz=Math.cos(heading)*speed; }
       }
+      const y=q.y??.83,ny=y+(q.vy||0)*dt;
       const nx=q.x+q.vx*dt,nz=q.z+q.vz*dt;
       let best=Infinity, target=null, obstacle=null;
       for (const c of this.coverNear(q.x,q.z,q.armed && W.insideRing(p.x,p.z))) {
         if(q.charged)continue;
-        const t=segmentCircle(q.x,q.z,nx,nz,c.x,c.z,c.r+.2); if(t<best){best=t;target=null;obstacle=c;}
+        const t=segmentCircle(q.x,q.z,nx,nz,c.x,c.z,c.r+.2); if(t<best&&y+(ny-y)*t<=(c.height??3.3)+.2){best=t;target=null;obstacle=c;}
       }
       for (const t of this.players.values()) {
-        if(t.id===p.id||!this.alive(t)||t.air>1.65||q.hitTargets?.has(t.id))continue;
-        const hit=segmentCircle(q.x,q.z,nx,nz,t.x,t.z,.85*t.size+.22);
+        if(t.id===p.id||!this.alive(t)||q.hitTargets?.has(t.id))continue;
+        const hit=AIR.sphere(q.x,y,q.z,nx,ny,nz,t.x,(t.air||0)+.83,t.z,.85*t.size+.22);
         if(hit<best){best=hit;target=t;obstacle=null;}
       }
       if(best!==Infinity){
-        q.x+=(nx-q.x)*best;q.z+=(nz-q.z)*best;q.life=0;
+        q.x+=(nx-q.x)*best;q.z+=(nz-q.z)*best;q.y=y+(ny-y)*best;q.life=0;
         const cast = q.hitTargets ? {hit:q.hitTargets} : null;
         if(target && (!cast || !cast.hit.has(target.id))) {
           if(cast)cast.hit.add(target.id);
@@ -278,7 +288,7 @@ export class MeadowCombat {
           q.banks--;const dx=q.x-obstacle.x,dz=q.z-obstacle.z,d=Math.hypot(dx,dz)||1,nx=dx/d,nz=dz/d,dot=q.vx*nx+q.vz*nz;
           q.vx-=2*dot*nx;q.vz-=2*dot*nz;q.x+=nx*.08;q.z+=nz*.08;q.life=.8;
         }
-      }else{q.x=nx;q.z=nz;}
+      }else{q.x=nx;q.z=nz;q.y=ny;}
       if(Math.hypot(q.x/W.x,q.z/W.z)>1.08)q.life=0;
     }
     this.bullets=this.bullets.filter(q=>q.life>0);
@@ -299,10 +309,11 @@ export class MeadowCombat {
       if(p.burnTicks){p.burnClock-=dt;if(p.burnClock<=0){p.burnClock+=.6;p.burnTicks--;const owner=this.players.get(p.burnOwner);
         if(this.canHarm(owner,p,p.burnArmed))this.hit(owner,p,p.burnDamage,{type:'fire',power:0,stun:0});}}
       if(p.attack){p.attackTime=Math.max(0,p.attackTime-dt);this.reflect(p);this.resolve(p);if(!p.attackTime)p.attack='';}
-      if(p.air>0||p.vy>0){p.vy-=17*dt;p.air+=p.vy*dt;if(p.air<=0){p.air=p.vy=0;this.emit('land',p.x,p.z,{i:p.id,color:p.color});}}
+      AIR.step(p,{slapHeld:this.active(p)&&p.slapHeld,ready:this.active(p)},dt,[...this.players.values()],this.airApi);
+      if(p.suplex)continue;
       const active=this.active(p),ix=active?p.ix||0:0,iz=active?p.iz||0:0,len=Math.max(1,Math.hypot(ix,iz));
-      const air=p.air>0||p.vy>0,base=p.stun>0?1.15:p.attack?(p.attack==='nova'?.5:3.9):p.dashTime>0?.54:7.35;
-      const speed=base*(p.chill>0?1-p.chillAmount:1)*(air?.32:1),factor=1-Math.exp(-(p.dashTime>0?28:19)*dt);
+      const air=p.air>0||p.vy>0,base=p.stun>0?1.15:p.air>0?7.35:p.attack?(p.attack==='nova'?.5:3.9):p.dashTime>0?.54:7.35;
+      const speed=base*(p.chill>0?1-p.chillAmount:1),factor=1-Math.exp(-(p.dashTime>0?28:19)*dt);
       p.vx+=(ix/len*speed-p.vx)*factor;p.vz+=(iz/len*speed-p.vz)*factor;
       p.x+=(p.vx+p.kx)*dt;p.z+=(p.vz+p.kz)*dt;
       const drag=Math.exp(-dt*(p.dashTime>0?2.4:air?4.1:12.5));p.kx*=drag;p.kz*=drag;

@@ -1,3 +1,14 @@
+# Bouncy jump combat, upward spits and Suplex City counters
+
+- Triple jump height with full-speed air movement.
+- Tap Slap in the air to dive; hold then release for a stronger, vulnerable charged slam.
+- Actual 3D spit trajectories and swept collision can interrupt airborne charges.
+- Perfect dodge or a facing, early slap counters a diver with a grab, flip and suplex slam.
+- Shared simulation for practice, friend duels and the Meadow Worker; damage only in the ring.
+- Procedural anticipation, squash/stretch, landing springs, impact feedback and reduced-motion support.
+- Meadow 5 / duel 8 carry full height, charge and projectile velocity with matching client/server.
+- 115 tests pass, including actual Worker input, 3D hits, charges and counter timing.
+
 # Stronger dodge + triple-size Atomic with a session aura
 
 - Strengthened all three dodge-upgrade ranks and aligned browser/Worker values.

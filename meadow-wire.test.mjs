@@ -94,3 +94,19 @@ test('Worker retains Atomic aura state for late joiners and periodically repairs
  assert.ok(repair);assert.equal(repair.casts[0].i,1);assert.equal(repair.casts[0].ageMs,16000);
  r.leave(ws);assert.equal(r.roster().length,0);
 });
+
+test('actual Worker input starts a jump and holds/releases its airborne attack',async()=>{
+ const {r,p,ws}=room(),{run}=codec();
+ const input=(seq,jump,slap,held)=>run(`inputPacket({ready:true,x:0,z:0,aim:0,slapHeld:${held},a:{slap:${slap},spit:0,dash:0,nova:0,jump:${jump}}},${seq})`);
+ await r.webSocketMessage(ws,input(1,0,0,false));await r.webSocketMessage(ws,input(2,1,0,false));assert.ok(p.vy>11);
+ r.tick();await r.webSocketMessage(ws,input(3,1,1,true));assert.equal(p.airMove,1);
+ for(let i=0;i<4;i++)r.tick();assert.ok(p.airCharge>.1);assert.equal(p.slapHeld,true);
+ await r.webSocketMessage(ws,input(4,1,1,false));r.tick();assert.equal(p.airMove,2);assert.ok(p.vy<-14);
+});
+
+test('actual Worker snapshots deliver unclipped jump height and upward spit to the real browser decoder',()=>{
+ const {r,p,sent}=room(),{run,context}=codec();
+ const target=r.combat.prepare({...p,id:2,x:0,z:6,air:3.5,vy:0,slapHeld:true,inputAt:Date.now(),ranks:{}});r.players.set(2,target);target.airMove=1;target.airCharge=.2;
+ p.x=p.z=0;r.combat.spawnBullet(p,0,11);r.tick();context.data=sent.find(x=>x instanceof ArrayBuffer);
+ const packet=run('decodeRoomState(data)');assert.ok(packet.players.find(p=>p.id===2).air>3);assert.ok(packet.bullets[0].y>.83);assert.ok(packet.bullets[0].vy>0);
+});

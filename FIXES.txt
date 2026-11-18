@@ -1,8 +1,11 @@
-Dodge upgrades + persistent Atomic
+Jump-combat release
 
-Atomic uses the uploaded cinematic at 3x size, followed by an aura until leaving.
-The aura survives rounds/rematches and is synchronized for other players.
-Missed cast events recover through host snapshots and Meadow session refreshes.
-Dodge upgrade ranks are stronger; Meadow honors full Ghost Dodge invulnerability.
-101 tests pass. Actual two-player phone rendering/FPS still need device testing.
-All game files are directly beside index.html, with no subfolders required.
+Jump is 3x higher, with full horizontal control. Airborne Slap starts a dive:
+hold to charge, release to slam. Spits aim up and interrupt charging slimes.
+Perfectly dodge or face/slap an incoming diver to perform a Suplex City counter.
+Procedural animation adds takeoff anticipation, stretch, charge compression,
+landing wobble and wrestling grabs/flips; reduced motion is supported.
+Existing stronger dodge builds and persistent 3x Atomic/aura are retained.
+Meadow 5 and friend-duel 8 must match on both phones; reload before joining.
+115 tests pass. Live phone visuals, RTT and FPS still need device testing.
+All supplied files belong directly beside index.html; no subfolders are needed.

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import './slimo-world.js';
+import './slimo-air-combat.js';
 import './slimo-rogue-spells.js';
 const W=globalThis.SlimoWorld,S=globalThis.SlimoRogueSpells;
 const read=name=>readFileSync(new URL('./'+name,import.meta.url),'utf8');
@@ -70,7 +71,7 @@ test('spell state is bounded, survives host snapshots and rejects malformed visu
 });
 
 test('real friend-duel snapshot validation accepts upgraded spells and rejects malformed spell projectiles',()=>{
- const source=read('slimo-game.js'),c=vm.createContext({SlimoWorld:W,SlimoRogueSpells:S,Math,performance,profile:{name:'test'},chosen:0,palette:[{},{},{},{}],ROUND_SECONDS:90});
+ const source=read('slimo-game.js'),c=vm.createContext({SlimoWorld:W,SlimoRogueSpells:S,AIR:globalThis.SlimoAirCombat,Math,performance,profile:{name:'test'},chosen:0,palette:[{},{},{},{}],ROUND_SECONDS:90});
  vm.runInContext(source.slice(source.indexOf('function skill('),source.indexOf('const stages =')),c);
  vm.runInContext(source.slice(source.indexOf('function skillRank('),source.indexOf('const BUILD_POINTS')),c);
  vm.runInContext(source.match(/function newRun\([^]*?\n}/)[0],c);
@@ -79,5 +80,7 @@ test('real friend-duel snapshot validation accepts upgraded spells and rejects m
  const state=c.freshMatch('rogue');state.duelMatch=1;state.phase='fight';state.p[0].ranks={stoneburst:3};state.p[0].active=state.p[1].active=true;
  S.trigger(state,0,'spit',e=>state.fx.push({type:'spell',id:++state.serial,i:0,key:e.key,rank:e.rank,color:0,x:e.x,z:e.z}));
  assert.equal(c.validSnapshot(JSON.parse(JSON.stringify(state))),true);
+ state.fx=[{type:'airSlam',id:999,i:0,color:0,x:0,z:0,height:0,radius:3,charge:1}];assert.equal(c.validSnapshot(state),true);
+ state.fx[0].height=-.01;assert.equal(c.validSnapshot(state),false);state.fx[0].height=0;
  state.run.spellEffects[0].orbs[0].vx=Infinity;assert.equal(c.validSnapshot(state),false);
 });

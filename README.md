@@ -10,6 +10,14 @@ The existing Cloudflare `slimo-meadow` Worker serves accounts, Open Meadow, an a
 
 No subfolders are needed in this release. Three.js, PeerJS, MP3s, checks and tests are all beside `index.html`; paths and npm commands match this layout. Do not upload `node_modules`, local credentials or old duplicate copies of the game.
 
+## Jump attacks and bouncy animation
+
+Jump (F or the Jump button) reaches three times the previous height, with full horizontal movement in the air. Tap Slap while airborne to dive, or hold Slap for up to 1.05 seconds and release to slam harder (12–28 base damage). The brief charge hover grants no invulnerability. Spits now aim vertically and use swept 3D collisions, so they can interrupt airborne charges.
+
+A defender who faces and slaps an incoming diver within the early 160 ms of the slap, or dodges within the perfect-dodge window, reverses the attack into a 0.65-second Suplex City throw for 22 base damage. Late counters fail. All damage remains confined to the ring in Meadow. Normal/hard practice rivals recognize incoming dives.
+
+The existing slime model uses procedural takeoff anticipation, volume-preserving stretch, charge compression, a diving pose, springy landing recovery, and a grab/flip pose for suplexes. Reduced motion suppresses exaggerated deformation and flips. The same aerial simulation runs in practice, on the duel host, and on the Meadow server. New protocol versions carry actual airborne heights, charging state and upward projectile velocity; reload both phones together.
+
 ## Dodge upgrades and reliable Atomic
 
 Slipstream cooldown ranks are 0.78 / 0.62 / 0.46 seconds. Ghost Dodge grants 60 / 120 / 180 ms extra invulnerability and 20 / 40 / 60 ms extra perfect-dodge time. Revenge Recipe adds 5 / 9 / 14 counter damage with 2.4 / 2.8 / 3.2 seconds to respond. Base dodge, slime model and basic attacks retain their existing parameters. Meadow now honors extra invulnerability after the movement portion ends.
@@ -53,17 +61,17 @@ npm test
 
 `npm run dev` uses Python 3 to serve the static frontend at `http://127.0.0.1:8765`. Account and multiplayer APIs require the configured deployment. `npm run deploy:worker` first rebuilds `slimo-live-client.generated.js`, then deploys with the pinned Wrangler. Do not edit the generated client by hand.
 
-Deploy to the existing Worker/account and retain its secrets and Durable Object namespaces. The configuration retains the v1 migration for `GameRoom`/`SlimoAccounts` and v2 for `DuelRelay`. Meadow protocol is **4**; friend-duel protocol is **7**. Google Identity Services must authorize `https://slimo-ten.vercel.app`; set the Google client ID and Owner email in Cloudflare configuration. Existing credentials were preserved by this update.
+Deploy to the existing Worker/account and retain its secrets and Durable Object namespaces. The configuration retains the v1 migration for `GameRoom`/`SlimoAccounts` and v2 for `DuelRelay`. Meadow protocol is **5**; friend-duel protocol is **8**. Google Identity Services must authorize `https://slimo-ten.vercel.app`; set the Google client ID and Owner email in Cloudflare configuration. Existing credentials were preserved by this update.
 
 All game assets, libraries, build commands and tests now live in this one folder. See `DEPLOY-FROM-PHONE.md` for uploads and server deployment. `npm run verify:worker` checks the configured Worker's public protocol versions.
 
 ## Validation limits
 
-101 automated tests pass. Both sunlight shader programs compiled and linked with Mesa OpenGL ES. A rendered depth/shadow test produced scattering for visible light, none for blocked light, and less scattering when foreground depth shortened the ray. Optional reproduction on Linux with Mesa/EGL:
+115 automated tests pass. Both sunlight shader programs compiled and linked with Mesa OpenGL ES. A rendered depth/shadow test produced scattering for visible light, none for blocked light, and less scattering when foreground depth shortened the ray. Optional reproduction on Linux with Mesa/EGL:
 
 ```sh
 node export-sunlight-shaders.mjs /tmp/slimo-shaders.json
 python3 check-sunlight-gl.py /tmp/slimo-shaders.json
 ```
 
-This cinematic release is deployed to the existing Worker. All 16 versioned browser assets were read back and their hashes checked; the deployed Atomic source matches this package. All seven Atomic shader programs compiled and linked with Mesa OpenGL ES. Full browser/device rendering and signed-in two-player performance are not verified by these tests. No measured phone FPS gain or lower Oman ping is claimed.
+This cinematic release is deployed to the existing Worker. All 17 versioned browser assets were read back and their hashes checked; the deployed Atomic source matches this package. All seven Atomic shader programs compiled and linked with Mesa OpenGL ES. Full browser/device rendering and signed-in two-player performance are not verified by these tests. No measured phone FPS gain or lower Oman ping is claimed.

@@ -3,7 +3,7 @@ globalThis.SlimoNetwork=(()=>{
   function stationary(input,p){return Math.hypot(input.x||0,input.z||0)<.001&&Math.hypot(p?.vx||0,p?.vz||0,p?.kx||0,p?.kz||0)<.02&&
     !(p?.air>0||p?.vy>0||p?.attackTime>0||p?.stun>0||p?.dashTime>0||p?.emote);}
   function inputKey(input){return [input.ready?1:0,Math.round((input.assist||0)*255),Math.round(input.x*16000),Math.round(input.z*16000),Math.round((input.aim||0)*10000),
-    ...['slap','spit','dash','nova','jump'].map(k=>input.a[k]&65535),Math.round((input.spitCharge||0)*255)].join(',');}
+    ...['slap','spit','dash','nova','jump'].map(k=>input.a[k]&65535),Math.round((input.spitCharge||0)*255),input.slapHeld?1:0].join(',');}
   function inputDue(now,last,key,previousKey,input,p,force=false){return force||now-last>=(key===previousKey&&stationary(input,p)?180:33);}
   function movingPlayer(p){return Math.hypot(p.vx||0,p.vz||0,p.kx||0,p.kz||0)>.02||p.attack||p.air>0||p.vy>0||p.dashTime>0||p.stun>0||p.hit>0||p.emote;}
   function interestSnapshot(data,players,bullets,receiver,playerBytes=34,bulletBytes=22){

@@ -78,3 +78,11 @@ test('HUD lookups reuse connected nodes and recover when a node is replaced', ()
   assert.equal(vm.runInContext("$('myHp')", c), element);
   assert.equal(queries, 2);
 });
+
+test('only the owning attack touch can release an airborne charge',()=>{
+ let releases=0;
+ const c=vm.createContext({abilityPointers:new Map([['slap',3]]),held:new Set(['slap']),setSlapHeld:()=>releases++});
+ vm.runInContext(fn('releaseAbility'),c);
+ vm.runInContext("releaseAbility('slap',{pointerId:4,type:'pointerup'})",c);assert.equal(releases,0);
+ vm.runInContext("releaseAbility('slap',{pointerId:3,type:'pointerup'});releaseAbility('slap',{pointerId:3,type:'lostpointercapture'})",c);assert.equal(releases,1);
+});

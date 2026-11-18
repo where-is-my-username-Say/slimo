@@ -9,6 +9,7 @@ const $ = id => {
   return element;
 };
 const T = window.THREE;
+const AIR=globalThis.SlimoAirCombat;
 const TAU = Math.PI * 2;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -426,7 +427,7 @@ const ROOM_INPUT = 54;
 const ROOM_STATE = 55;
 const MEADOW_ACTIONS = actions;
 const PLAYER_BYTES = WORLD.playerBytes;
-const GLOB_BYTES = 22;
+const GLOB_BYTES = 28;
 const meleeFlag = { '': 0, slap: 1, spit: 2, nova: 3 };
 const meleeName = ['', 'slap', 'spit', 'nova'];
 function wireNumber(n, lo, hi) { return Math.min(hi, Math.max(lo, Number.isFinite(n) ? n : 0)); }
@@ -443,6 +444,7 @@ function inputPacket(input, sequence) {
   v.setInt16(12, Math.round(wireAngle(input.aim) * 10000));
   MEADOW_ACTIONS.forEach((key, i) => v.setUint16(14 + 2 * i, input.a[key] & 65535));
   v.setUint8(24, Math.round(wireNumber(input.spitCharge,0,1)*255));
+  v.setUint8(25,input.slapHeld?1:0);
   return v.buffer;
 }
 function decodeRoomInput(buffer) {
@@ -453,7 +455,7 @@ function decodeRoomInput(buffer) {
   MEADOW_ACTIONS.forEach((key, i) => { a[key] = v.getUint16(14 + 2 * i); });
   return { seq: v.getUint32(4), ready: v.getUint8(2) === 1, assist: v.getUint8(3) / 255,
     x: wireNumber(v.getInt16(8) / 16000, -1, 1), z: wireNumber(v.getInt16(10) / 16000, -1, 1),
-    aim: v.getInt16(12) / 10000, spitCharge: v.getUint8(24)/255, a };
+    aim: v.getInt16(12) / 10000, spitCharge: v.getUint8(24)/255, slapHeld:!!v.getUint8(25), a };
 }
 function encodeRoomState(tick, ack, players, bullets) {
   const v = new DataView(new ArrayBuffer(12 + players.length * PLAYER_BYTES + bullets.length * GLOB_BYTES));
@@ -475,13 +477,14 @@ function encodeRoomState(tick, ack, players, bullets) {
     v.setUint8(o + 19, (meleeFlag[p.attack] || 0) | (p.combo & 3) << 2 | (p.countering ? 16 : 0) |
       (p.respawnAt ? 32 : 0) | (p.hit > .05 ? 64 : 0) | (p.shield > 0 ? 128 : 0));
     time(o + 20, p.attackTime); time(o + 21, p.duration); time(o + 22, p.contactTime);
-    time(o + 23, p.dashTime); time(o + 24, p.air); time(o + 25, p.dash);
+    time(o + 23, p.dashTime); v.setUint8(o+24,Math.round(wireNumber(p.air,0,6.375)*40)); time(o + 25, p.dash);
     time(o + 26, p.stun); time(o + 27, p.chill);
     v.setUint8(o + 28, Math.round(wireNumber(p.chillAmount, 0, 1) * 100));
     v.setUint8(o + 29, p.burnTicks || 0);
     v.setUint8(o + 30, (p.emote || 0) | (p.attackPlayful ? 8 : 0));
     v.setUint16(o + 31, Math.round(wireNumber(p.emoteAge, 0, 65.535) * 1000));
     v.setUint8(o+33,Math.round(wireNumber(p.mana ?? 100,0,100)));
+    v.setUint8(o+34,p.airMove||0);v.setUint8(o+35,Math.round(wireNumber(p.airCharge,0,1.05)*200));number(o+36,p.vy||0,100);time(o+38,p.suplexTime||0);time(o+39,p.grabTime||0);
     o += PLAYER_BYTES;
   }
   for (const q of bullets) {
@@ -496,6 +499,7 @@ function encodeRoomState(tick, ack, players, bullets) {
     v.setUint8(o + 19, q.returns || 0);
     v.setUint8(o + 20, q.fork || 0);
     v.setUint8(o + 21, (q.charged ? 1 : 0) | (q.rock ? 2 : 0));
+    number(o+22,q.y??.83,100);number(o+24,q.vy||0,100);
     o += GLOB_BYTES;
   }
   return v.buffer;
@@ -516,9 +520,9 @@ function decodeRoomState(buffer) {
       attack: meleeName[flag & 3], combo: (flag >> 2) & 3, countering: !!(flag & 16), knockedOut: !!(flag & 32),
       hit: flag & 64 ? .2 : 0, shield: !!(flag & 128), attackTime: v.getUint8(o + 20) / 100,
       duration: v.getUint8(o + 21) / 100, contactTime: v.getUint8(o + 22) / 100, dashTime: v.getUint8(o + 23) / 100,
-      air: v.getUint8(o + 24) / 100, dash: v.getUint8(o + 25) / 100, stun: v.getUint8(o + 26) / 100,
+      air: v.getUint8(o + 24) / 40, dash: v.getUint8(o + 25) / 100, stun: v.getUint8(o + 26) / 100,
       chill: v.getUint8(o + 27) / 100, chillAmount: v.getUint8(o + 28) / 100, burnTicks: v.getUint8(o + 29),
-      mana: v.getUint8(o+33),
+      mana: v.getUint8(o+33), airMove:v.getUint8(o+34),airCharge:v.getUint8(o+35)/200,vy:v.getInt16(o+36)/100,suplexTime:v.getUint8(o+38)/100,grabTime:v.getUint8(o+39)/100,
       emote: (social & 7) < ROOM_EMOTES.length ? social & 7 : 0, attackPlayful: !!(social & 8), emoteAge: v.getUint16(o + 31) / 1000
     });
     o += PLAYER_BYTES;
@@ -528,7 +532,7 @@ function decodeRoomState(buffer) {
       id: v.getUint32(o), owner: v.getUint16(o + 4), x: v.getInt16(o + 6) / 100, z: v.getInt16(o + 8) / 100,
       vx: v.getInt16(o + 10) / 300, vz: v.getInt16(o + 12) / 300, color: v.getUint8(o + 14) % 4,
       fire: Math.min(3, v.getUint8(o + 15)), frost: Math.min(3, v.getUint8(o + 16)), seeker: Math.min(3, v.getUint8(o + 17)),
-      charged: !!(v.getUint8(o+21)&1), rock: !!(v.getUint8(o+21)&2), scale: v.getUint8(o+21)&1 ? 1.45 : 1,
+      y:v.getInt16(o+22)/100,vy:v.getInt16(o+24)/100, charged: !!(v.getUint8(o+21)&1), rock: !!(v.getUint8(o+21)&2), scale: v.getUint8(o+21)&1 ? 1.45 : 1,
       cannon: Math.min(3, v.getUint8(o + 18)), returns: Math.min(3, v.getUint8(o + 19)), fork: Math.min(3, v.getUint8(o + 20))
     });
     o += GLOB_BYTES;
@@ -2020,9 +2024,11 @@ function animateFighters(dt, time) {
     const growthAge = clamp(1 - p.growth / 1.8, 0, 1);
     const swell = p.growth > 0 && !settings.reduced ? Math.sin(growthAge * Math.PI * growthRank) * (1 - growthAge) * .17 : 0;
     const physicalSize = p.growth > 0 ? lerp(1 + (skills.colossus.levels[growthRank - 2]?.size || 0), p.size, smooth(0, .66, growthAge)) : p.size;
-    const stretch = clamp(1 + breath + swell + m.bob * .63 + m.wobble * .27 - (dash ? .25 : 0) - puff * .11 + recoil * .19 + flex * .21 + cheer * .10 + pose * (heavy ? .29 : .16) - (knock ? knock.squash : 0), .49, 1.63);
+    if(m.lastAir>.1&&p.air<=.01)m.landAt=time;m.lastAir=p.air;
+    const airPose=AIR.pose(p,time-(m.landAt??-99),settings.reduced),airborneStretch=airPose.stretch-1;
+    const stretch = clamp(1 + airborneStretch + breath + swell + m.bob * .63 + m.wobble * .27 - (dash ? .25 : 0) - puff * .11 + recoil * .19 + flex * .21 + cheer * .10 + pose * (heavy ? .29 : .16) - (knock ? knock.squash : 0), .49, 1.63);
     m.root.position.set(rootX, p.air, rootZ);
-    m.root.rotation.set(knock ? knock.rx : 0, 0, knock ? knock.rz : 0);
+    m.root.rotation.set(knock ? knock.rx : airPose.tilt, 0, knock ? knock.rz : 0);
     if (knock) {
       const halfHeight = .85 * stretch * physicalSize;
       rotatedCenter.set(0, halfHeight, 0).applyQuaternion(m.root.quaternion);
@@ -2098,7 +2104,7 @@ function animateFighters(dt, time) {
       arm.shoulder.scale.set(.69 + power * .36, .76 + power * .37, .78 + power * .32);
       arm.shoulder.position.y = .57 + (strike ? anticipation * (1 - settle) * (heavy ? .54 : .34) : 0) + flex * .34;
       arm.shoulder.position.z = .035 + power * .40;
-      arm.shoulder.rotation.set(flex * -.56, arm.side * (swing + .09), arm.side * (.14 + ready + cheer * .82 + power * (heavy ? .47 : .24) - (dash ? .43 : 0)));
+      arm.shoulder.rotation.set(flex * -.56-airPose.arms*.7, arm.side * (swing + .09), arm.side * (.14 + ready + cheer * .82 + power * (heavy ? .47 : .24) - (dash ? .43 : 0)));
       arm.palm.scale.setScalar(1 + power * ((heavy ? .88 : .55) + skillRank(p, 'power') * .16));
       arm.palm.position.x = arm.side * (.56 + power * skillValue(p, 'reach', 'reach') * .68);
       arm.palm.rotation.set(puff * -.3, arm.side * (-.25 + snap * power * .68), arm.side * (.25 - power * .67));
@@ -2153,7 +2159,7 @@ let queued = [{}, {}];
 function event(type, x, z, data = {}) {
   const fx = { id: ++state.serial, type, x, z, ...data };
   state.fx.push(fx);
-  if (['atomic','ownerWave','start', 'dash', 'slap', 'spit', 'splat', 'return', 'nova', 'hit', 'ko', 'perfect', 'pickup', 'skill', 'waveCue', 'wave', 'spell'].includes(type)) networkDirty = true;
+  if (['jump','airCharge','airDive','airSlam','suplex','atomic','ownerWave','start', 'dash', 'slap', 'spit', 'splat', 'return', 'nova', 'hit', 'ko', 'perfect', 'pickup', 'skill', 'waveCue', 'wave', 'spell'].includes(type)) networkDirty = true;
   if (state.fx.length > 25) state.fx.shift();
   return fx;
 }
@@ -2244,6 +2250,7 @@ function damagePlayer(i, damage, nx, nz, options) {
   }
   if (anchor && power >= 4) emitSkill(i, 'anchor');
   damage = Math.max(1, Math.round(damage * (1 - shell) * (1 - bubble)));
+  AIR.cancel(p);
   p.hp = Math.max(0, p.hp - damage);
   p.lastDamage = source;
   p.stun = Math.max(p.stun, stun);
@@ -2276,12 +2283,14 @@ function damagePlayer(i, damage, nx, nz, options) {
 }
 function startMove(i, name) {
   const p = state.p[i], input = inputs[i];
-  if (p.hp <= 0 || p.stun > 0 || p.dashTime > 0 || p.air > .1) return false;
+  if (p.hp <= 0 || p.stun > 0 || p.dashTime > 0 || p.suplex) return false;
+  if(name==='slap' && (p.air>.1||p.vy>0)){p.id=i;p.airArmed=true;return AIR.begin(p,(type,x,z,data)=>event(type,x,z,data));}
+  if(p.airMove && name!=='slap')return false;
+  if(p.air>.1 && name!=='spit')return false;
   const aim = aimOf(p, input);
   if (name === 'jump') {
     if(p.attackTime>0 || p.vy>0) return false;
-    p.vy=6.4; p.air=.04;
-    return true;
+    p.id=i;return AIR.jump(p,(type,x,z,data)=>event(type,x,z,data));
   }
   if (name === 'dash') {
     if (p.dash > 0 || (p.attackTime > 0 && (!p.struck || p.duration - p.attackTime < .20))) return false;
@@ -2341,7 +2350,7 @@ function reflectSpit(i) {
     if (glob.owner === i || glob.returns >= 3) continue;
     const dx = glob.x - p.x, dz = glob.z - p.z;
     const d = Math.hypot(dx, dz);
-    if (d >= best || dx * glob.vx + dz * glob.vz >= 0 || Math.abs(angleDiff(p.attackAim, Math.atan2(dx, dz))) > (glob.charged ? 1.72 : 1.36)) continue;
+    if (Math.abs((glob.y??.83)-p.air-.83)>1.35 || d >= best || dx * glob.vx + dz * glob.vz >= 0 || Math.abs(angleDiff(p.attackAim, Math.atan2(dx, dz))) > (glob.charged ? 1.72 : 1.36)) continue;
     candidate = glob;
     best = d;
   }
@@ -2349,6 +2358,7 @@ function reflectSpit(i) {
   const rival = state.p[1 - i];
   const bearing = Math.atan2(rival.x - candidate.x, rival.z - candidate.z);
   const direction = p.attackAim + clamp(angleDiff(p.attackAim, bearing), -.64, .64);
+  AIR.aimSpit(candidate,p,rival);
   candidate.owner = i;
   candidate.color = p.color;
   candidate.returns++;
@@ -2433,6 +2443,7 @@ function resolveAttack(i, dt) {
           cannon: skillRank(p, 'speed'), fork: skillRank(p, 'fork'), banks: skillValue(p, 'boomer', 'banks')
         });
       }
+      for(const q of state.bullets.filter(q=>q.volley===volley))AIR.aimSpit(q,p,rival);
       p.kx -= x * 2.7;
       p.kz -= z * 2.7;
       event('spit', spawnX, spawnZ, { i, color: p.color, angle: aim });
@@ -2460,18 +2471,21 @@ function advanceBullets(dt) {
       const delta = angleDiff(heading, Math.atan2(p.x - x, p.z - z));
       const turn = (glob.charged ? 1650 : skills.seeker.levels[glob.seeker - 1].turn) * Math.PI / 180 * dt;
       const speed = Math.hypot(glob.vx, glob.vz);
+      const flight=Math.max(.08,Math.hypot(p.x-x,p.z-z)/speed);
+      glob.vy=(glob.vy||0)+(clamp((p.air+.83-(glob.y??.83))/flight,-45,45)-(glob.vy||0))*Math.min(1,dt*8);
       glob.vx = Math.sin(heading + clamp(delta, -turn, turn)) * speed;
       glob.vz = Math.cos(heading + clamp(delta, -turn, turn)) * speed;
     }
+    const y=glob.y??.83, ny=y+(glob.vy||0)*dt;
     const nx = x + glob.vx * dt, nz = z + glob.vz * dt;
-    glob.life -= dt;
+    glob.life -= dt;glob.y=ny;
     let obstacle = Infinity, pillar = null;
     for (const o of runCover()) {
       const f = glob.charged ? Infinity : segmentCircle(x, z, nx, nz, o.x, o.z, o.r + .20);
-      if (f < obstacle) { obstacle = f; pillar = o; }
+      if (f < obstacle && y+(ny-y)*f<=(o.height??3.3)+.2) { obstacle = f; pillar = o; }
     }
-    const impact = (!glob.charged && p.air > 1.45) || !p.active ? Infinity : segmentCircle(x, z, nx, nz, p.x, p.z, (1.18+(glob.scale-1||0)*.46)*p.size);
-    const brush = perfectWindow(p) && !glob.dodged ? segmentCircle(x, z, nx, nz, p.x, p.z, 1.73 * p.size) : Infinity;
+    const impact = !p.active ? Infinity : AIR.sphere(x,y,z,nx,ny,nz,p.x,p.air+.83,p.z,(1.05+(glob.scale-1||0)*.46)*p.size);
+    const brush = Math.abs(y-p.air-.83)<1.3 && perfectWindow(p) && !glob.dodged ? segmentCircle(x, z, nx, nz, p.x, p.z, 1.73 * p.size) : Infinity;
     if (brush < obstacle || (glob.charged && impact < obstacle && p.inv > 0)) {
       perfectDodge(1 - glob.owner);
       if(glob.charged){
@@ -2554,11 +2568,12 @@ function contain(p) {
   }
 }
 function drivePlayer(p, input, dt, air = p.air > 0 || p.vy > 0) {
-  const baseSpeed = p.stun > 0 ? 1.15 : p.attack ? (p.attack === 'nova' ? .5 : 3.9) : p.dashTime > 0 ? .54 : 7.35;
+  if(p.suplex||p.suplexTime>0)return;
+  const baseSpeed = p.stun > 0 ? 1.15 : p.air>0 ? 7.35 : p.attack ? (p.attack === 'nova' ? .5 : 3.9) : p.dashTime > 0 ? .54 : 7.35;
   const speed = baseSpeed * (p.chill > 0 ? 1 - p.chillAmount : 1);
   const traction = state.run && stageIndex() === 2 ? .61 : 1;
   const len = Math.max(1, Math.hypot(input.x, input.z));
-  const control = air ? .32 : 1;
+  const control = 1;
   const turn = damp((p.dashTime > 0 ? 28 : 19) * traction, dt);
   p.vx = lerp(p.vx, input.x / len * speed * control, turn);
   p.vz = lerp(p.vz, input.z / len * speed * control, turn);
@@ -2594,14 +2609,11 @@ function advancePlayer(i, dt) {
 
   if (!p.attack && p.stun <= 0) p.r = aimOf(p, input);
   const air = p.air > 0 || p.vy > 0;
-  if (air) {
-    p.vy -= 17 * dt;
-    p.air += p.vy * dt;
-    if (p.air <= 0) {
-      p.air = p.vy = 0;
-      event('land', p.x, p.z, { i, color: p.color });
-    }
-  }
+  p.id=i;state.p.forEach((p,i)=>p.id=i);
+  AIR.step(p,input,dt,state.p,{
+    canHarm:()=>true,emit:(type,x,z,data)=>event(type,x,z,data),
+    hit:(source,target,damage,options)=>{const d=Math.hypot(target.x-source.x,target.z-source.z)||1;return damagePlayer(target.id,damage,(target.x-source.x)/d,(target.z-source.z)/d,{...options,source:options.type,chain:0,counter:options.type==='suplex'});}
+  });
   drivePlayer(p, input, dt, air);
   if (p.burnTicks > 0 && p.hp > 0) {
     p.burnClock -= dt;
@@ -2732,6 +2744,9 @@ function updateBot(dt) {
   const windup = rival.attack === 'slap' && !rival.struck && rival.duration - rival.attackTime > .07 && distance < 3.7 &&
     Math.abs(angleDiff(rival.attackAim, bearing + Math.PI)) < .87;
   const evasive = level > 0 && !blocked && (threat || windup) && bot.rng() < (level === 2 ? .74 : .38);
+  if(level>0&&rival.airMove===2&&rival.air<2.2&&distance<3.6&&!blocked&&bot.rng()<(level===2?.75:.4)){
+    if(p.dash<=0)input.a.dash++;else if(p.attackTime<=.01)input.a.slap++;return;
+  }
   if (objective?.urgent && level > 0 && p.dash <= 0 && p.attackTime <= .055) {
     input.a.dash++;
     return;
@@ -2910,6 +2925,17 @@ function showEffect(q) {
   const rotation = q.angle ?? 0;
   const height = .88 + (q.height || 0);
   switch (q.type) {
+    case 'jump':
+      shockRing(q.x,.06,q.z,.2,1.4,0xc7f7df,.25,.4);if(!local)playSound('jump',q.x,q.z);break;
+    case 'airCharge':
+      shockRing(q.x,(q.height||0)+.1,q.z,.3,1.5,0xbadfff,.35,.5);if(local)callout('Jump attack','Hold to charge · release to slam',.9);break;
+    case 'airDive':
+      playSound('slap',q.x,q.z);break;
+    case 'suplex':
+      playSound('perfect',q.x,q.z);if(affected)callout('SUPLEX CITY!', 'Perfectly timed counter',1.2);break;
+    case 'airSlam':
+      playSound('nova',q.x,q.z);shockRing(q.x,.1,q.z,.3,q.radius||3,0xa8efff,.5,.75);
+      particles(q.x,.2,q.z,settings.reduced?8:22,0xa8efff,6,3,.6,'drop');if(affected)kickCamera(.13,.007);break;
     case 'atomic': {
       startAtomic(q.i,q.castId);
       break;
@@ -3204,7 +3230,7 @@ function animateGlobs(dt, time) {
     m.z += (q.z - m.z) * f;
     const size = (q.scale || 1) * (q.returns ? 1.31 : 1) * (1 + (q.fire || 0) * .065);
     const wobble = Math.sin(time * 29 + q.id);
-    m.group.position.set(m.x, .83 + wobble * .066, m.z);
+    m.group.position.set(m.x, (q.y??.83) + wobble * .066, m.z);
     if(q.charged) m.light.material.color.setHex(0xcca2ff);
     m.group.rotation.y = Math.atan2(q.vx, q.vz);
     m.group.scale.setScalar(size);
@@ -3224,7 +3250,7 @@ function animateGlobs(dt, time) {
     m.trail += dt;
     if (m.trail > .048) {
       m.trail = 0;
-      particles(m.x, .73, m.z, q.fire ? q.fire + 1 : q.returns ? 3 : 1, globPalette(q).light, 1.7, q.fire ? 1.2 : .31, .30, q.cannon ? 'line' : 'drop', Math.atan2(-q.vx, -q.vz));
+      particles(m.x, (q.y??.83)-.1, m.z, q.fire ? q.fire + 1 : q.returns ? 3 : 1, globPalette(q).light, 1.7, q.fire ? 1.2 : .31, .30, q.cannon ? 'line' : 'drop', Math.atan2(-q.vx, -q.vz));
     }
   }
   for (const [id, o] of globModels) {
@@ -3434,14 +3460,16 @@ function animateRoomFighter(m, p, dt, time, selected) {
   const strike = p.attack === 'slap' ? Math.sin(clamp(age / Math.max(.15, p.duration), 0, 1) * Math.PI) : 0;
   const recoil = p.attack === 'spit' ? Math.sin(clamp(age / Math.max(.16, p.duration), 0, 1) * Math.PI) * .14 : 0;
   const flash = p.hit > 0 ? Math.sin(time * 27 + p.id) * .07 : 0;
-  const squash = 1 + bob * .43 - (p.dashTime > 0 ? .18 : 0) + flash;
+  if(m.lastAir>.1&&p.air<=.01)m.landAt=time;m.lastAir=p.air;
+  const airPose=AIR.pose(p,time-(m.landAt??-99),settings.reduced);
+  const squash = airPose.stretch + bob * .43 - (p.dashTime > 0 ? .18 : 0) + flash;
   const social = meadowPose(p, dt, m);
   const width = (m.size / Math.sqrt(squash) + recoil) * social.width;
   m.jelly.scale.set(width, m.size * squash * social.height, width);
   m.jelly.rotation.set(recoil * -.8, m.yaw + social.yaw, flash + social.roll + strike * .14 * (p.combo === 1 ? -1 : 1));
   m.jelly.position.y = bob + social.y;
   m.root.position.set(m.x, p.air, m.z);
-  m.root.rotation.set(0, 0, 0);
+  m.root.rotation.set(airPose.tilt, 0, 0);
   m.guard.visible = p.shield;
   m.guard.rotation.set(time * .9, 0, time * .7);
   m.shadow.position.set(m.x, .035, m.z);
@@ -3454,7 +3482,7 @@ function animateRoomFighter(m, p, dt, time, selected) {
   for (const [i, arm] of m.arms.entries()) {
     const side = i ? 1 : -1;
     const swing = (p.combo === 1 ? i === 0 : i === 1) ? strike : 0;
-    const gesture = social.arm + (side > 0 ? social.wave : 0);
+    const gesture = social.arm + airPose.arms + (side > 0 ? social.wave : 0);
     arm.position.set(side * (1.11 + swing * .48 + gesture * .17), .59 + swing * .31 + gesture * .64, swing * 1.05 + gesture * .19);
     arm.rotation.z = side * gesture * .35;
     arm.scale.set(.28 + swing * .22, .21 + swing * .16, .27 + swing * .34);
@@ -3641,6 +3669,12 @@ let stickPointer = null;
 let stickCenter = null;
 let joystick = { x: 0, z: 0 };
 let lastRepeat = { slap: -99, spit: -99 };
+let slapHeld=false;
+function setSlapHeld(value){
+  slapHeld=value===true;
+  if(mode==='public')sendRoomInput(true);
+  else if(mode==='guest')tickNet(performance.now(),true);
+}
 let spitHold = null;
 let spitCharge = 0;
 function beginSpitHold() {
@@ -3655,6 +3689,7 @@ function releaseSpitHold() {
 let lastSafeHint = -Infinity;
 const stick = $('stick'), nub = $('nub'), zone = $('zoneL');
 function resetInputs() {
+  slapHeld=false;
   spitHold=null;
   spitCharge=0;
   keys.clear();
@@ -3682,7 +3717,9 @@ function trigger(action) {
   inputCounts[action]++;
   if (action === 'slap' || action === 'spit') lastRepeat[action] = clock;
   if (mode === 'guest') {
-    if(action!=='jump') predictAttack(action);
+    if(action==='jump'&&prediction&&prediction.stun<=0)AIR.jump(prediction);
+    else if(action==='slap'&&prediction&&(prediction.air>.1||prediction.vy>0))AIR.begin(prediction,()=>{});
+    else predictAttack(action);
     tickNet(performance.now(), true);
   } else if (mode === 'public') {
     predictPublicAttack(action);
@@ -3700,7 +3737,7 @@ function readInput() {
   return {
     x: ready ? (-g * right + f * forward) / magnitude : 0,
     z: ready ? (f * right + g * forward) / magnitude : 0,
-    aim: desired, assist: view.lock ? 1 : settings.assist, a: { ...inputCounts }, ready, spitCharge
+    aim: desired, assist: view.lock ? 1 : settings.assist, a: { ...inputCounts }, ready, spitCharge, slapHeld
   };
 }
 function repeatInput() {
@@ -3708,7 +3745,7 @@ function repeatInput() {
   const p = mode === 'public' ? publicPose() : state.p[localSlot];
   for (const name of ['slap']) {
     const key = name === 'slap' ? keys.has('j') || keys.has(' ') : keys.has('e');
-    if ((!key && !held.has(name)) || clock - lastRepeat[name] < .24 || p.attackTime > .095 || p.stun > .05 || p.dashTime > .08) continue;
+    if (p.airMove || p.air>.1 || (!key && !held.has(name)) || clock - lastRepeat[name] < .24 || p.attackTime > .095 || p.stun > .05 || p.dashTime > .08) continue;
     trigger(name);
   }
 }
@@ -3751,6 +3788,7 @@ addEventListener('keydown', event => {
   keys.add(key);
   if (!event.repeat && KEY_ACTION[key]) {
     if(key==='e') beginSpitHold();
+    else if(KEY_ACTION[key]==='slap'){setSlapHeld(true);trigger('slap');}
     else trigger(KEY_ACTION[key]);
   }
   if(!event.repeat && key==='x') slimoActivateEmote('atomic');
@@ -3759,6 +3797,7 @@ addEventListener('keyup', event => {
   const key=event.key.toLowerCase();
   keys.delete(key);
   if(key==='e') releaseSpitHold();
+  if((key==='j'||key===' ')&&!keys.has('j')&&!keys.has(' '))setSlapHeld(false);
 });
 addEventListener('blur', resetInputs);
 canvas.addEventListener('contextmenu', event => event.preventDefault());
@@ -3769,6 +3808,7 @@ canvas.addEventListener('pointerdown', event => {
   drag = { id: event.pointerId, x: event.clientX, y: event.clientY, originX: event.clientX, originY: event.clientY, turned: false, at: performance.now() };
   canvas.setPointerCapture(event.pointerId);
   if(event.pointerType==='mouse' && event.button===2) beginSpitHold();
+  else if(event.pointerType==='mouse' && renderedPose(localSlot).air>.1){setSlapHeld(true);trigger('slap');drag.airAttack=true;}
 });
 canvas.addEventListener('pointermove', event => {
   if (drag?.id !== event.pointerId) return;
@@ -3792,8 +3832,9 @@ function releaseDrag(event) {
   if (drag?.id !== event.pointerId) return;
   if(event.type==='pointerup' && event.pointerType==='mouse'){
     if(event.button===2) releaseSpitHold();
-    else if(!drag.turned) trigger('slap');
-  }else if(event.type!=='pointerup') spitHold=null;
+    else if(drag.airAttack)setSlapHeld(false);
+    else if(!drag.turned)trigger('slap');
+  }else if(event.type!=='pointerup'){spitHold=null;if(drag.airAttack)setSlapHeld(false);}
   drag = null;
 }
 for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.addEventListener(type, releaseDrag);
@@ -3846,6 +3887,7 @@ function releaseAbility(name, event) {
     if (event.type === 'pointerup') releaseSpitHold();
     else { spitHold = null; spitCharge = 0; }
   }
+  if(name==='slap')setSlapHeld(false);
   held.delete(name);
 }
 const abilityButtons = [...document.querySelectorAll('.ability')];
@@ -3857,7 +3899,7 @@ for (const button of abilityButtons) {
     abilityPointers.set(name, event.pointerId);
     unlockAudio();
     if(name==='spit') beginSpitHold();
-    else trigger(name);
+    else {if(name==='slap')setSlapHeld(true);trigger(name);}
     held.add(name);
     button.setPointerCapture(event.pointerId);
   });
@@ -4822,6 +4864,7 @@ function encodeInput(input, sequence) {
   v.setInt16(12, aim === null ? -32768 : Math.round(aim * 10000));
   actions.forEach((key, i) => v.setUint16(14 + i * 2, input.a[key] % 65536));
   v.setUint8(24, Math.round(clamp(input.spitCharge || 0, 0, 1) * 255));
+  v.setUint8(25,input.slapHeld?1:0);
   return buffer;
 }
 function readFastInput(buffer) {
@@ -4840,7 +4883,7 @@ function readFastInput(buffer) {
     x: clamp(v.getInt16(8) / 16384, -1, 1),
     z: clamp(v.getInt16(10) / 16384, -1, 1),
     aim: aim === -32768 ? null : aim / 10000,
-    assist: v.getUint8(3) / 255, a, ready: remoteReady, spitCharge: v.getUint8(24) / 255
+    assist: v.getUint8(3) / 255, a, ready: remoteReady, spitCharge: v.getUint8(24) / 255,slapHeld:!!v.getUint8(25)
   };
 }
 function packMotion() {
@@ -4900,7 +4943,7 @@ function reconcile(pose, ack) {
   const current = prediction;
   const localDash = current && current.predictedDash > performance.now() && pose.dashTime <= 0 && authoritative.stun <= 0;
   const corrected = {
-    ...authoritative, ...pose,
+    ...authoritative, ...pose,suplex:authoritative.suplex?{...authoritative.suplex}:null,
     predictedDash: localDash ? current.predictedDash : 0,
     dashInput: current?.dashInput ?? inputCounts.dash
   };
@@ -4927,7 +4970,7 @@ function predictGuest(input, dt) {
     return;
   }
   const server = state.p[1];
-  if (!prediction) prediction = { ...server, ...priorMotion[1], dashInput: input.a.dash, predictedDash: 0 };
+  if (!prediction) prediction = { ...server, ...priorMotion[1],suplex:server.suplex?{...server.suplex}:null, dashInput: input.a.dash, predictedDash: 0 };
   const p = prediction;
   p.attack = server.attack;
   p.stun = server.stun;
@@ -4947,6 +4990,7 @@ function predictGuest(input, dt) {
       playSound('dash', p.x, p.z);
     }
   }
+  AIR.step(p,input,Math.min(.05,dt),[],{emit(){},hit(){},canHarm:()=>false});
   drivePlayer(p, input, Math.min(.05, dt));
   if (!p.attack && p.stun <= 0) p.r = aimOf(p, input);
   predictionHistory.push({ sequence: inputSequence + 1, input, dt: Math.min(.05, dt) });
@@ -4954,6 +4998,7 @@ function predictGuest(input, dt) {
 }
 function predictAttack(attack) {
   const p = state.p[1];
+  if(attack==='jump')return;
   if (attack === 'dash' || p.attackTime > .045 || p.stun > 0 || p.air > .1 || p.dashTime > 0 ||
       (attack === 'nova' && p.en < 100) || attackPreview) return;
   const combo = attack === 'slap' && p.chain > 0 && p.comboLanded && p.combo < 2 ? p.combo + 1 : 0;
@@ -4968,7 +5013,7 @@ function renderedPose(slot) {
   if (mode !== 'guest' || state.phase !== 'fight' || state.paused) return p;
   if (slot === 1) {
     const pose = prediction ? { ...prediction, ...p, x: prediction.x, z: prediction.z, r: prediction.r,
-      vx: prediction.vx, vz: prediction.vz, air: prediction.air, dashTime: prediction.dashTime } : { ...p, ...priorMotion[1] };
+      vx: prediction.vx, vz: prediction.vz, vy:prediction.vy,airMove:prediction.airMove,airCharge:prediction.airCharge,suplexTime:prediction.suplexTime, air: prediction.air, dashTime: prediction.dashTime } : { ...p, ...priorMotion[1] };
     if (!attackPreview) return pose;
     const age = (performance.now() - attackPreview.started) / 1000;
     if (p.attackTime > .045 || p.stun > 0 || age > .29) {
@@ -5133,7 +5178,7 @@ function readCommand(data) {
     x: axis(data.x), z: axis(data.z), a, ready: remoteReady,
     aim: Number.isFinite(data.aim) ? data.aim % TAU : null,
     assist: Number.isFinite(data.assist) ? clamp(data.assist, 0, 1) : 0,
-    spitCharge: Number.isFinite(data.spitCharge) ? clamp(data.spitCharge, 0, 1) : 0
+    slapHeld:data.slapHeld===true,spitCharge: Number.isFinite(data.spitCharge) ? clamp(data.spitCharge, 0, 1) : 0
   };
   if (seq) lastRemoteSequence = seq;
 }
@@ -5170,7 +5215,7 @@ function renderBullet(q) {
   const at = mode === 'public' ? publicRoom.updated : projectileFrameAt;
   if (!['guest', 'public'].includes(mode) || state.paused || state.phase !== 'fight' || !at) return q;
   const age = clamp((performance.now() - at) / 1000, 0, mode === 'public' ? .07 : .14);
-  return { ...q, x: q.x + q.vx * age, z: q.z + q.vz * age };
+  return { ...q, y:(q.y??.83)+(q.vy||0)*age, x: q.x + q.vx * age, z: q.z + q.vz * age };
 }
 
 let audio = null;
@@ -6009,7 +6054,7 @@ async function openPublicConnection() {
   });
 }
 function roomPose(meta, p) {
-  return { ...p, ...meta, active: true, growth: 0, vy: 0 };
+  return { ...p, ...meta, active: true, growth: 0, vy: p.vy||0 };
 }
 function receiveRoomState(packet) {
   const room = publicRoom;
@@ -6066,6 +6111,8 @@ function predictPublicAttack(attack) {
     playSound('dash', p.x, p.z);
     return;
   }
+  if(attack==='jump'){AIR.jump(p);return;}
+  if(attack==='slap'&&(p.air>.1||p.vy>0)){AIR.begin(p,()=>{});return;}
   const move = attack === 'slap' ? moves.slap[0] : moves[attack];
   const scale = attack === 'slap' && roomCanFight() ? skillValue(p, 'tempo', 'time', 1) : 1;
   room.preview = { attack, started: performance.now(), duration: move.duration * scale, contactTime: move.contact * scale };
@@ -6217,6 +6264,7 @@ function animatePublic(dt, time) {
     const step = Math.min(.05, dt);
     if (p.emote && Math.hypot(input.x, input.z) > .12) p.emote = p.emoteAge = 0;
     else if (p.emote) p.emoteAge += step;
+    AIR.step(p,input,step,[],{emit(){},hit(){},canHarm:()=>false});
     drivePlayer(p, input, step);
     if (!p.attack && p.stun <= 0 && input.ready) p.r = input.aim;
     if(!SlimoNetwork.stationary(input,p))room.history.push({ sequence: room.sequence + 1, input, dt: step });
@@ -6714,7 +6762,7 @@ function attach(connection, hostSide, token) {
   connection.on('error', end);
 }
 const phases = ['waiting', 'countdown', 'fight', 'round', 'draft', 'over'];
-const eventTypes = ['spell','atomic','ownerWave','start', 'wind', 'slap', 'chargeSpit', 'spit', 'splat', 'dash', 'perfect', 'return', 'chargeNova', 'nova', 'hit', 'land', 'ko', 'skill', 'waveCue', 'wave', 'pickup', 'hazard', 'burn'];
+const eventTypes = ['jump','airCharge','airDive','airSlam','suplex','spell','atomic','ownerWave','start', 'wind', 'slap', 'chargeSpit', 'spit', 'splat', 'dash', 'perfect', 'return', 'chargeNova', 'nova', 'hit', 'land', 'ko', 'skill', 'waveCue', 'wave', 'pickup', 'hazard', 'burn'];
 const validColor = n => Number.isInteger(n) && n >= 0 && n < palette.length;
 const validSlot = n => n === 0 || n === 1;
 const validPoint = p => p && Number.isFinite(p.x) && Number.isFinite(p.z) && Math.abs(p.x) < 100 && Math.abs(p.z) < 100;
@@ -6747,12 +6795,15 @@ function validSnapshot(s) {
       Object.entries(p.ranks).every(([k, v]) => Object.hasOwn(skills, k) && Number.isInteger(v) && v > 0 && v < 4) &&
       ['x', 'z', 'r', 'vx', 'vz', 'kx', 'kz', 'air', 'vy', 'hp', 'maxHp', 'size', 'en', 'dash', 'dashTime', 'stun',
         'hit', 'attackTime', 'duration', 'contactTime', 'combo', 'chill', 'chillAmount', 'growth'].every(key => Number.isFinite(p[key])) &&
-      p.maxHp >= 100 && p.maxHp <= 154 && p.size >= 1 && p.size <= 1.3 && ['', 'slap', 'spit', 'nova'].includes(p.attack))) return false;
-  if (!s.bullets.every(q => validPoint(q) && (q.scale === undefined || Number.isFinite(q.scale) && q.scale>=1 && q.scale<=2) && (q.charged === undefined || typeof q.charged === 'boolean') && validColor(q.color) && validSlot(q.owner) && Number.isSafeInteger(q.id) &&
+      AIR.valid(p) && p.maxHp >= 100 && p.maxHp <= 154 && p.size >= 1 && p.size <= 1.3 && ['', 'slap', 'spit', 'nova'].includes(p.attack))) return false;
+  if (!s.bullets.every(q => validPoint(q) && (q.scale === undefined || Number.isFinite(q.scale) && q.scale>=1 && q.scale<=2) && (q.y===undefined||Number.isFinite(q.y)&&Math.abs(q.y)<500)&&(q.vy===undefined||Number.isFinite(q.vy)&&Math.abs(q.vy)<=100)&&(q.charged === undefined || typeof q.charged === 'boolean') && validColor(q.color) && validSlot(q.owner) && Number.isSafeInteger(q.id) &&
       [0, 1, 2, 3].includes(q.returns) && Number.isFinite(q.vx) && Number.isFinite(q.vz) &&
       ['fire', 'frost', 'seeker', 'fork', 'cannon'].every(k => [0, 1, 2, 3].includes(q[k] ?? 0)))) return false;
   return s.fx.every(q => {
     if (!validPoint(q) || !eventTypes.includes(q.type) || !Number.isSafeInteger(q.id)) return false;
+    if(['airCharge','airDive','airSlam','suplex'].includes(q.type)&&(!validSlot(q.i)||!Number.isFinite(q.height)||q.height<0||q.height>8))return false;
+    if(q.type==='airSlam'&&(!Number.isFinite(q.radius)||q.radius<1||q.radius>5||!Number.isFinite(q.charge)||q.charge<0||q.charge>1))return false;
+    if(q.type==='suplex'&&!validSlot(q.j))return false;
     if(q.type==='spell')return validSlot(q.i)&&Object.hasOwn(WORLD.spells,q.key)&&[1,2,3].includes(q.rank)&&validColor(q.color);
     if (q.type === 'start') return true;
     if (!validColor(q.color)) return false;

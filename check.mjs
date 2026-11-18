@@ -15,7 +15,7 @@ for (const match of html.matchAll(/<(?:script|link)\b[^>]*(?:src|href)="\.\/([^"
 const scripts = [...html.matchAll(/<script\s+src="\.\/([^"]+)"/g)].map(m => m[1]);
 assert.ok(scripts.indexOf('three-r128.min.js') < scripts.indexOf('slimo-game.js'));
 assert.ok(scripts.indexOf('slimo-audio-synth.js') < scripts.indexOf('slimo-game.js'));
-for(const file of ['slimo-atomic.js','slimo-sunlight.js','slimo-network.js','slimo-rogue-spells.js','slimo-duel-transport.js','slimo-world.js','slimo-meadow-map.js','slimo-magic-vfx.js','slimo-meadow-ui.js']) {
+for(const file of ['slimo-air-combat.js','slimo-atomic.js','slimo-sunlight.js','slimo-network.js','slimo-rogue-spells.js','slimo-duel-transport.js','slimo-world.js','slimo-meadow-map.js','slimo-magic-vfx.js','slimo-meadow-ui.js']) {
   assert.ok(scripts.includes(file) && scripts.indexOf(file)<scripts.indexOf('slimo-game.js'), file+' must load before the game');
 }
 for (const file of readdirSync(root).filter(f => /\.(js|mjs)$/.test(f))) {

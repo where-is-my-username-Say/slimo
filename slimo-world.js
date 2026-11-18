@@ -104,5 +104,5 @@ globalThis.SlimoWorld = (() => {
   }
   return Object.freeze({ x, z, ring, rocks, trees, cover, structures, landmarks, spells, passives, stat, buildKeys, cleanBuild, insideRing, wallSegments,
     starterBuild: Object.freeze({power:2,swift:2,colossus:1,guard:1,fire:1,frost:1}),
-    spawn: Object.freeze({x: -24, z: 15}), protocol: 4, duelProtocol: 7, playerBytes: 34, buildPoints: 18 });
+    spawn: Object.freeze({x: -24, z: 15}), protocol: 5, duelProtocol: 8, playerBytes: 40, buildPoints: 18 });
 })();

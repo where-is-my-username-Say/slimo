@@ -8,7 +8,7 @@ Replace the existing files when asked. GitHub uploads do not remove old folders 
 
 Keep your existing Vercel GitHub deployment. The static game, Three.js, PeerJS and all MP3s are at the repository root. The supplied `vercel.json` forwards `/api/slimo/*` to your existing Cloudflare Worker. Uploading the files updates the website when Vercel finishes deploying.
 
-The current cinematic release is already installed on the existing Worker; the following server steps apply to future source changes.
+The current jump-combat release is already installed on the existing Worker; the following server steps apply to future source changes.
 
 ## Multiplayer server and matching hosted client
 
@@ -28,6 +28,6 @@ The deploy command rebuilds `slimo-live-client.generated.js` automatically. A cu
 
 The config sets `keep_vars: true` so future Wrangler deployments retain dashboard variables. Preserve existing `GOOGLE_CLIENT_ID`, `OWNER_EMAIL`, `GAME_ROOM`, `ACCOUNTS` and `DUEL_RELAY` settings and namespaces. Keep the v1 and v2 migrations in `wrangler.jsonc`. Never paste just `worker.js` into the dashboard: it imports other supplied modules. Do not change protocol numbers to bypass a mismatch.
 
-Both phones must reload the same version and use a fresh friend-duel invitation. Meadow protocol is 4; friend-duel protocol is 7. Atomic uses the existing authenticated cast events; the server validates casts, and each phone draws the animation locally.
+Both phones must reload the same version and use a fresh friend-duel invitation. Meadow protocol is 5; friend-duel protocol is 8. Atomic uses the existing authenticated cast events; the server validates casts, and each phone draws the animation locally.
 
 Play the matching Worker-hosted version through your Vercel site at https://slimo-ten.vercel.app/api/slimo/play after deploying both sides.

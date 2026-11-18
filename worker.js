@@ -7,7 +7,7 @@ import { serveLiveClient } from './slimo-live-client.generated.js';
 import { MeadowCombat } from './slimo-meadow-combat.js';
 const WORLD = globalThis.SlimoWorld;
 const NETWORK = globalThis.SlimoNetwork;
-const CAP=50, PROTOCOL=WORLD.protocol, INPUT=54, STATE=55, PLAYER_BYTES=WORLD.playerBytes, GLOB_BYTES=22;
+const CAP=50, PROTOCOL=WORLD.protocol, INPUT=54, STATE=55, PLAYER_BYTES=WORLD.playerBytes, GLOB_BYTES=28;
 const EMOTES=['none','dance','sit','wave','spin','bounce'];
 const EMOTE_DURATION_MS=[0,0,0,1650,1150,1450];
 const cors={ 'Access-Control-Allow-Origin':'*', 'Access-Control-Allow-Methods':'GET, OPTIONS', 'Content-Type':'application/json' };
@@ -56,6 +56,7 @@ export class GameRoom extends DurableObject {
       if (p.hasInput && (advance === 0 || advance >= 0x80000000)) return;
       const firstInput = !p.hasInput;
       p.spitCharge = v.getUint8(24)/255;
+      p.slapHeld=!!v.getUint8(25);
       p.seq = seq;
       p.hasInput = true;
       p.inputAt = Date.now();
@@ -149,15 +150,15 @@ export class GameRoom extends DurableObject {
       const guard=p.ranks.guard>0&&!p.guarded;
       v.setUint8(o+19,({slap:1,spit:2,nova:3}[p.attack]||0)|(p.combo&3)<<2|(p.counterUntil>this.combat.time?16:0)|(p.respawnAt?32:0)|(p.hit>0?64:0)|(guard?128:0));
       timer(o+20,p.attackTime);timer(o+21,p.duration);timer(o+22,p.contactTime);
-      timer(o+23,p.dashTime);timer(o+24,p.air);timer(o+25,p.dash);timer(o+26,p.stun);timer(o+27,p.chill);
+      timer(o+23,p.dashTime);v.setUint8(o+24,Math.round(bounded(p.air,0,6.375)*40));timer(o+25,p.dash);timer(o+26,p.stun);timer(o+27,p.chill);
       v.setUint8(o+28,Math.round(bounded(p.chillAmount,0,1)*100));v.setUint8(o+29,p.burnTicks||0);
       v.setUint8(o+30,(p.emote||0)|(!p.attackArmed?8:0));v.setUint16(o+31,Math.round((p.emoteAge%40)*1000));
-      v.setUint8(o+33,Math.round(p.mana));o+=PLAYER_BYTES;
+      v.setUint8(o+33,Math.round(p.mana));v.setUint8(o+34,p.airMove||0);v.setUint8(o+35,Math.round(bounded(p.airCharge,0,1.05)*200));num(o+36,p.vy||0,100);timer(o+38,p.suplexTime||0);timer(o+39,p.grabTime||0);o+=PLAYER_BYTES;
     }
     for(const q of bullets){
       v.setUint32(o,q.id);v.setUint16(o+4,q.owner);num(o+6,q.x,100);num(o+8,q.z,100);num(o+10,q.vx,300);num(o+12,q.vz,300);
       for(const [i,key] of ['color','fire','frost','seeker','cannon','returns','fork'].entries())v.setUint8(o+14+i,q[key]||0);
-      v.setUint8(o+21,(q.charged?1:0)|(q.rock?2:0));o+=GLOB_BYTES;
+      v.setUint8(o+21,(q.charged?1:0)|(q.rock?2:0));num(o+22,q.y??.83,100);num(o+24,q.vy||0,100);o+=GLOB_BYTES;
     }
     const events=this.combat.events.splice(0);
     // Each client receives its own ACK and the actors/projectiles within interest range.

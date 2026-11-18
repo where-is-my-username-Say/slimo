@@ -10,7 +10,7 @@ test('the hosted game serves the exact checked frontend and all text dependencie
   const response=serve(new Request(base));assert.equal(response.headers.get('cache-control'),'no-store');
   const html=await response.text();assert.match(html,/<base href="\/">/);
   const dependencies=[...html.matchAll(/(?:src|href)="(\/api\/slimo\/play\/assets\/[a-f0-9]{16}\/([^"?]+))"/g)];
-  assert.equal(dependencies.length,16);
+  assert.equal(dependencies.length,17);
   for(const [,path,file]of dependencies){
     const asset=serve(new Request(new URL(path,base)));assert.equal(asset.status,200);assert.match(asset.headers.get('cache-control'),/immutable/);
     assert.equal(await asset.text(),readFileSync(new URL('./'+file,import.meta.url),'utf8'),file);
