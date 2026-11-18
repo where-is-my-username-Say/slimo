@@ -1,57 +1,57 @@
 # Slimo
 
-The game uses Vercel for the HTML and audio, a dedicated Cloudflare Worker named `slimo-meadow` for Google accounts and Open Meadow, and WebRTC for friend duels.
+Live updated game: **https://slimo-ten.vercel.app/api/slimo/play**. Reload this address on both phones before creating a fresh friend-duel invitation. The original Vercel root may still contain older frontend files.
 
-## Configure and deploy
+The existing Cloudflare `slimo-meadow` Worker serves accounts, Open Meadow, an authenticated friend-duel relay, and a matching browser client through Vercel's existing API rewrite. Recorded audio remains under the unchanged Vercel `/audio/` paths. The slime model and basic slap/spit/dodge/Nova parameters are retained.
 
-1. In Google Cloud, configure Google Identity Services with a **Web application** OAuth client. Authorize the JavaScript origin `https://slimo-ten.vercel.app`. If the OAuth consent screen is in Testing, add the accounts that will play as test users, or publish the app.
-2. From the extracted repo root, use one shell block. Wrangler prompts for authentication and each value as needed. Supply the Google **client ID** at the first secret prompt and the Gmail address that should be Owner at the second. Keep the Owner email out of public source. If your Cloudflare Workers subdomain differs from `balochnajool.workers.dev`, set the correct address in both `wrangler.jsonc` and `vercel.json` before deploying.
+## Latest lighting and network changes
 
-   ```sh
-   npm install && npx wrangler login && npm run deploy:worker && npx wrangler secret put GOOGLE_CLIENT_ID && npx wrangler secret put OWNER_EMAIL
-   ```
+The flat triangular sun-ray meshes are removed. `slimo-sunlight.js` integrates sunlight through the actual directional shadow map, stopping at scene depth. Trees cast shadows into the scattering pass. The sky's sun direction matches the light, and the shadow region follows the player through the expanded map. A quarter-resolution, depth-aware composite limits work and light bleeding around foreground objects. Low quality, reduced motion and devices without depth textures use ordinary directional lighting directly.
 
-3. Copy the extracted files into the root of the **slimo** repo and deploy to the existing Vercel project with the Other preset. The API rewrite in `vercel.json` carries the session cookies through the same game origin. Keep this project pointed at the dedicated Worker, separate from Slimeoo's backend.
-4. Sign in with two authorized Google accounts. Claim a unique username for each, add the other username under Friends, then have the host start Friend duel and invite that friend from the in-game Friends panel. The recipient can join from their notification. Open Meadow is separate from friend duels. Check that the host and guest both see the countdown, hits and finisher, then play an entire match against the Owner to check the achievement.
+Meadow simulation remains at 20 Hz. Active play receives up to 20 state updates per second; a completely idle room receives five, including an immediate initial snapshot. Each client receives actors/projectiles within 80 m, with its own player and projectiles retained. The visible-player radius is 47 m. Unchanged stationary input becomes a 180 ms heartbeat; movement retains the existing input cadence, and actions send immediately. Idle prediction history is cleared to avoid replaying old idle frames. Queue limits suppress stale movement packets and prevent a congested fast channel from growing a larger JSON-input backlog.
 
-## Controls
+A Middle East placement hint is applied to the regional Meadow object. It is a best-effort hint, not a guarantee of a specific server city or ping. The displayed ping remains measured round-trip time; this update does not replace it with an edge-only or estimated number.
 
-- **F** or **Jump** jumps. Hold and release **E**, right-click, or **Spit** to charge in a duel. At full charge the shot homes in and goes through cover. Dodge timing or a timed slap can stop it.
-- Black-and-white anime impact frames play on combo hits and finishers. Reduced motion disables the frames. Cinematic mode cycles through **Backstep**, **Skyhook**, and **Whirlwind** before the knockout ragdoll. Reduced motion skips these finishes and reduces Atomic’s particle effects.
-- The Owner has a gold aura, Wave in duels, and Atomic. A player who wins a completed duel against the Owner unlocks Atomic after both signed-in clients confirm the result. **X** or the **Atomic** button starts a silent 16-second aura around the caster while play continues.
-- Invites are in-game notifications. The game checks while its tab is visible. Friend-duel results are agreed by both clients. The backend does not simulate the duel or adjudicate client cheating. Open Meadow uses the Worker-authoritative combat and ring rules described below.
+## Roguelike spells
 
-## Expanded Meadow and spells
+All eight spells are regular roguelike skill-card choices with three upgrade ranks. They have internal cooldowns and **no separate spell bar or mana UI**. Choose them alongside existing skills; their card descriptions show their trigger:
 
-The walking map is twice as wide and twice as deep (four times the area). Explore Crystal Grove, Sunken Ruins, Whisper Lake and Lantern Hollow along the new paths. Use **M** or the **Map** button for landmarks, nearby players and directions back to the ring.
+| Existing move | Upgrade effects |
+| --- | --- |
+| Dodge | Earthwake Wall, Mending Spring |
+| Slap | Ember Fault, Storm Coil |
+| Spit | Pebble Barrage, Starfall |
+| Nova | Frost Bloom, Gale Vortex |
 
-Meadow has eight spells, each with three upgrade ranks: **Earthwake Wall**, **Ember Fault**, **Frost Bloom**, **Storm Coil**, **Gale Vortex**, **Pebble Barrage**, **Mending Spring** and **Starfall**. Earthwake raises animated stone blocks; inside the ring these block players and ordinary projectiles until they sink away. Other spells have distinct telegraphs, projectiles, particles or impact effects. Spells cost mana and have individual cooldowns. Mana regenerates automatically.
+Earthwake rises into temporary collision cover. Other spells have telegraphs, moving rocks, eruptions, lightning, frost or healing effects. The host simulates their damage and sends their state to the guest. Practice can equip these skills for its roguelike mode. Meadow builds contain the original passive skills; direct Meadow spell casts are rejected.
 
-Use **1–8** or tap a spell slot. Open **Upgrade** outside the ring to allocate up to **18 build points** across passives and spells. Existing saved builds are retained; choose the **Spell starter** room preset to try all eight spells. Spell slots show learned ranks, mana and cooldown state. These new spells belong to Open Meadow; friend duels and practice retain their original moves and build selection.
+## Expanded Meadow
 
-Slaps and spits work throughout Meadow with sound, impact effects and playful text. Outside the ring they cause no damage, knockback, burn or slow. An attack must start inside the ring, and both its caster and target must still be inside when damage resolves. Entering the ring cannot arm a shot launched outside. Leaving clears lingering damage and slows. Spells outside are visual only, including walls and healing. Knocked-out players respawn at the safe spawn after a short delay.
+The walking map is twice as wide and twice as deep as the original, with Crystal Grove, Sunken Ruins, Whisper Lake and Lantern Hollow. Use **M** or **Map** for nearby players, landmarks and ring navigation. Slaps and spits produce sound, effects and playful text outside the ring without damage, knockback, burn or slow. Damage requires the attack to originate in the ring and both participants to remain inside at impact. Knocked-out players respawn safely.
 
-### Deploy the frontend and Worker together
+## Deploy and develop
 
-This update changes Meadow's network protocol to **4** and adds shared modules imported by the Worker. Deploy the entire extracted source, including all `slimo-*.js` files, then deploy the Worker with `npm run deploy:worker`. Deploy the frontend and Worker in the same maintenance window; older clients must reload. Updating only the HTML will not enable the new combat or spells. Existing Durable Object bindings and account secrets are retained; no new migration is required.
-
-## Sound
-
-Tap **Sound on/off** in the lobby or duel controls for a quick mute. In **Settings**, use **Test sound** and the separate Master, Music and Combat sliders. Charge, Nova-ready and low-health alerts can be switched off separately.
-
-New jump, charge, healing, combo, result and interface cues are synthesized locally. Existing recorded effects are retained, with short synthesized fallbacks while samples download or if a download fails. Music crossfades between the existing tracks; blocked playback retries with backoff and can be retried immediately with a tap. Mobile browsers still require an initial interaction.
-
-## Development and checks
-
-Use Node.js 24 or newer. The regression checks require no dependency install:
+Use Node.js 24 or newer. Install pinned dependencies with `npm ci`.
 
 ```sh
+npm run build:live-client
 npm run check
 npm test
 ```
 
-For a local preview, `npm run dev` requires Python 3 and serves at `http://127.0.0.1:8765`. Static serving does not provide the production account API or Cloudflare room service. Test signed-in multiplayer on the configured deployment with two accounts.
+`npm run dev` uses Python 3 to serve the static frontend at `http://127.0.0.1:8765`. Account and multiplayer APIs require the configured deployment. `npm run deploy:worker` first rebuilds `slimo-live-client.generated.js`, then deploys with the pinned Wrangler. Do not edit the generated client by hand.
 
-`slimo-game.js` contains the previously inline game code, making gameplay functions visible to JavaScript indexing tools such as Graphify. `slimo-audio-files.js` maps recorded assets; `slimo-audio-synth.js` contains original procedural sound definitions. The existing Three.js r128 and PeerJS 1.5.5 bundles are unchanged under `vendor/`. Their versioned filenames are immutable cache keys: use a new filename for a future library update.
+Deploy to the existing Worker/account and retain its secrets and Durable Object namespaces. The configuration retains the v1 migration for `GameRoom`/`SlimoAccounts` and v2 for `DuelRelay`. Meadow protocol is **4**; friend-duel protocol is **7**. Google Identity Services must authorize `https://slimo-ten.vercel.app`; set the Google client ID and Owner email in Cloudflare configuration. Existing credentials were preserved by this update.
 
-See `CHANGES.md` for verified changes and remaining limitations. The slime model and friend-duel combat are preserved; public Meadow now has its own server-authoritative combat engine.
+The manually triggered **Deploy Slimo Worker** GitHub workflow supports later deployments from a phone; see `DEPLOY-FROM-PHONE.md`. `npm run verify:worker` checks the configured Worker's public protocol versions.
+
+## Validation limits
+
+87 automated tests pass. Both sunlight shader programs compiled and linked with Mesa OpenGL ES. A rendered depth/shadow test produced scattering for visible light, none for blocked light, and less scattering when foreground depth shortened the ray. Optional reproduction on Linux with Mesa/EGL:
+
+```sh
+node scripts/export-sunlight-shaders.mjs /tmp/slimo-shaders.json
+python3 scripts/check-sunlight-gl.py /tmp/slimo-shaders.json
+```
+
+The production Worker and all 15 versioned browser assets were read back and checked after deployment. Full browser/device rendering and signed-in two-player performance are not verified by these tests. No measured phone FPS gain or lower Oman ping is claimed.

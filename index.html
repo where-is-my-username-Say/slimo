@@ -992,11 +992,6 @@ body[data-impact-frame="negative"] #slimoImpact::before,body[data-impact-frame="
     <button type="submit" class="primary">Send</button>
     <button type="button" id="quickChatCancel" aria-label="Close quick chat">×</button>
   </form>
-  <section id="meadowMagic" aria-label="Meadow spells" hidden>
-    <div class="magic-topline"><strong>Spells</strong><span id="manaLabel">Mana 100</span><button id="spellBuild" type="button">Upgrade</button></div>
-    <div id="manaMeter" role="progressbar" aria-label="Spell mana" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><i></i></div>
-    <div id="spellSlots"></div>
-  </section>
   <section id="meadowMapPanel" aria-label="Meadow map" hidden><canvas id="meadowMapCanvas" width="256" height="232" role="img" aria-label="Meadow map showing you, landmarks and the damage ring"></canvas><p id="meadowLocation"></p><button id="mapRing" type="button">Guide to ring</button><button id="mapClose" type="button">Close map</button></section>
   <div id="ringCompass" role="status" hidden></div>
   <div id="publicHint" hidden></div>
@@ -1148,7 +1143,6 @@ body[data-impact-frame="negative"] #slimoImpact::before,body[data-impact-frame="
 <p id="accountStatus" role="status">Connecting to Slimo…</p><button id="retryGoogle" type="button">Retry sign-in</button>
 </section></div>
 <script src="./vendor/three-r128.min.js"></script>
-<script src="./vendor/peerjs-v1.5.5.min.js"></script>
 <script src="./slimo-audio-files.js"></script>
 <script src="./slimo-account.js"></script>
 <script src="./slimo-cinematics.js"></script>
@@ -1157,6 +1151,10 @@ body[data-impact-frame="negative"] #slimoImpact::before,body[data-impact-frame="
 <script src="./slimo-meadow-map.js"></script>
 <script src="./slimo-magic-vfx.js"></script>
 <script src="./slimo-meadow-ui.js"></script>
+<script src="./slimo-duel-transport.js"></script>
+<script src="./slimo-rogue-spells.js"></script>
+<script src="./slimo-sunlight.js"></script>
+<script src="./slimo-network.js"></script>
 <script src="./slimo-game.js"></script>
 </body>
 </html>

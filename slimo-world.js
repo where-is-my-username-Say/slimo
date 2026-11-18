@@ -47,7 +47,7 @@ globalThis.SlimoWorld = (() => {
     (px - ring.x) ** 2 + (pz - ring.z) ** 2 <= ring.radius ** 2;
   const spells = {};
   function spell(id, name, color, icon, cost, cooldown, build) {
-    spells[id] = { id, name, color, icon, group: 'Meadow spells',
+    spells[id] = { id, name, color, icon, group: 'Arcane',
       levels: [1, 2, 3].map(rank => ({ rank, cost, cooldown: cooldown - (rank - 1), ...build(rank) })) };
   }
   spell('earthwall', 'Earthwake Wall', 0xd9ad73, 'shield', 24, 14, r => ({
@@ -103,6 +103,6 @@ globalThis.SlimoWorld = (() => {
     });
   }
   return Object.freeze({ x, z, ring, rocks, trees, cover, structures, landmarks, spells, passives, stat, buildKeys, cleanBuild, insideRing, wallSegments,
-    starterBuild: Object.freeze({earthwall:1,embertrail:1,frostbloom:1,stormcoil:1,vortex:1,stoneburst:1,mending:1,starfall:1,power:2,swift:2,colossus:1,guard:1}),
-    spawn: Object.freeze({x: -24, z: 15}), protocol: 4, playerBytes: 34, buildPoints: 18 });
+    starterBuild: Object.freeze({power:2,swift:2,colossus:1,guard:1,fire:1,frost:1}),
+    spawn: Object.freeze({x: -24, z: 15}), protocol: 4, duelProtocol: 7, playerBytes: 34, buildPoints: 18 });
 })();

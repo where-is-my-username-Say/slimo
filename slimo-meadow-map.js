@@ -13,7 +13,7 @@ const SlimoMeadowMap = (() => {
     const gold=new T.MeshBasicMaterial({color:0xffd18b});
     const matrix=new T.Object3D(),color=new T.Color(),chunks=[],landmarks=[],beacons=[];
     function mesh(geometry,material,group,x,y,z,sx=1,sy=1,sz=1) {
-      const m=new T.Mesh(geometry,material);m.position.set(x,y,z);m.scale.set(sx,sy,sz);group.add(m);return m;
+      const m=new T.Mesh(geometry,material);m.position.set(x,y,z);m.scale.set(sx,sy,sz);m.castShadow=!material.transparent&&!material.isMeshBasicMaterial;m.receiveShadow=true;group.add(m);return m;
     }
     function batch(geometry,material,group,items) {
       const m=new T.InstancedMesh(geometry,material,items.length);
@@ -34,7 +34,7 @@ const SlimoMeadowMap = (() => {
         trunks.push({x,y:2*s,z,sx:.7*s,sy:4*s,sz:.7*s});
         for(let k=0;k<4;k++){const a=k*2.4;leaves.push({x:x+Math.sin(a)*s,y:(4.4+k*.45)*s,z:z+Math.cos(a)*s,sx:2.2*s,sy:1.35*s,sz:2*s,color:[0x497c5e,0x72a374,0x608e65,0x89aa78][k]});}
       }
-      batch(trunk,wood,group,trunks);batch(leaf,foliage,group,leaves);chunks.push(group);
+      batch(trunk,wood,group,trunks).castShadow=true;batch(leaf,foliage,group,leaves).castShadow=true;chunks.push(group);
     }
     const path=new T.MeshStandardMaterial({color:0xc9bf91,roughness:1});
     for(const place of world.landmarks.filter(p=>p.id!=='ring')){

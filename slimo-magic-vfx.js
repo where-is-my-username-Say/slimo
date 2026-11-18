@@ -95,7 +95,7 @@ const SlimoMagicVfx = (() => {
             }positions.needsUpdate=true;}
         }else if(effect.key==='stoneburst'){
           m.pieces.forEach((piece,i)=>{const a=effect.aim+(i/(m.pieces.length-1)-.5)*.95,d=1.2+age*16;
-            piece.visible=age<.14;piece.position.set(Math.sin(a)*d,.8+Math.sin(age*8+i)*.08,Math.cos(a)*d);piece.scale.setScalar(.17+effect.rank*.045);piece.rotation.set(motion*5+i,motion*7,0);});
+            const orb=effect.orbs?.[i];piece.visible=orb?orb.live:age<.14;piece.position.set(orb?orb.x+orb.vx*delta-effect.x:Math.sin(a)*d,.8+Math.sin(age*8+i)*.08,orb?orb.z+orb.vz*delta-effect.z:Math.cos(a)*d);piece.scale.setScalar(.17+effect.rank*.045);piece.rotation.set(motion*5+i,motion*7,0);});
         }else if(effect.key==='mending'){
           m.pieces.forEach((piece,i)=>{const a=i*2.4+motion*.6;piece.position.set(Math.sin(a)*(1+i*.08),.3+(motion*.9+i*.2)%2.3,Math.cos(a)*(1+i*.08));piece.rotation.y=-motion*.5;});
         }else if(effect.key==='starfall'){

@@ -1,8 +1,12 @@
 import { DurableObject } from 'cloudflare:workers';
 export { SlimoAccounts } from './accounts.mjs';
+export { DuelRelay } from './slimo-duel-relay.js';
 import './slimo-world.js';
+import './slimo-network.js';
+import { serveLiveClient } from './slimo-live-client.generated.js';
 import { MeadowCombat } from './slimo-meadow-combat.js';
 const WORLD = globalThis.SlimoWorld;
+const NETWORK = globalThis.SlimoNetwork;
 const CAP=50, PROTOCOL=WORLD.protocol, INPUT=54, STATE=55, PLAYER_BYTES=WORLD.playerBytes, GLOB_BYTES=22;
 const EMOTES=['none','dance','sit','wave','spin','bounce'];
 const EMOTE_DURATION_MS=[0,0,0,1650,1150,1450];
@@ -11,7 +15,7 @@ const response=(data,status=200)=>new Response(JSON.stringify(data),{status,head
 const bounded=(v,lo,hi)=>Math.min(hi,Math.max(lo,Number.isFinite(v)?v:0));
 const wrap=a=>Math.atan2(Math.sin(a),Math.cos(a));
 const send=(ws,p)=>{try{ws.send(JSON.stringify(p));}catch{}};
-const cleanBuild = raw => WORLD.cleanBuild(raw);
+const cleanBuild = raw => WORLD.cleanBuild(Object.fromEntries(Object.entries(raw||{}).filter(([key])=>!Object.hasOwn(WORLD.spells,key))));
 
 export class GameRoom extends DurableObject {
   constructor(ctx,env){
@@ -69,7 +73,7 @@ export class GameRoom extends DurableObject {
     let m;try{m=JSON.parse(raw);}catch{return;}if(!m||typeof m.t!=='string')return;
     if(m.t==='leave'){this.leave(ws);return;}
     if(m.t==='join'){
-      if(m.protocol!==PROTOCOL){send(ws,{t:'error',message:'Game and server protocol versions do not match.'});this.leave(ws);return;}
+      if(m.protocol!==PROTOCOL){send(ws,{t:'error',serverProtocol:PROTOCOL,clientProtocol:m.protocol,message:'The game and Worker are different versions. Deploy the matching Worker, then reload the game.'});this.leave(ws);return;}
       if(p.joined)return;
       for (const other of [...this.players.values()]) {
         if (other.id !== p.id && other.profile.id === p.profile.id) {
@@ -88,7 +92,7 @@ export class GameRoom extends DurableObject {
     }else if(!p.joined)return;
     else if(m.t==='ping'&&Number.isFinite(m.stamp))send(ws,{t:'pong',stamp:m.stamp});
     else if(m.t==='cast'){
-      send(ws,{t:'castResult',key:typeof m.key==='string'?m.key:'',...this.combat.cast(p,m.key)});
+      send(ws,{t:'castResult',ok:false,message:'Spells are roguelike upgrades. Use the existing combat moves after choosing one.'});
     }else if(m.t==='build'){
       if(WORLD.insideRing(p.x,p.z)||p.hp<=0){send(ws,{t:'build',ok:false,message:'Leave the fight ring before changing your build.'});return;}
       p.ranks=cleanBuild(m.ranks);p.maxHp=100+([18,36,54][p.ranks.colossus-1]||0);p.size=1+([.10,.19,.29][p.ranks.colossus-1]||0);p.hp=Math.min(p.hp,p.maxHp);
@@ -130,6 +134,9 @@ export class GameRoom extends DurableObject {
     this.tickNumber=(this.tickNumber+1)>>>0;
     this.combat.tick(.05,Date.now());
     const bullets=this.combat.bullets;
+    // Keep simulation at 20 Hz. Idle rooms need only five snapshots per second.
+    if(this.tickNumber%4!==0&&!bullets.length&&!this.combat.events.length&&!this.combat.rosterDirty&&
+       players.every(p=>p.lastStateTick!==undefined&&!NETWORK.movingPlayer(p)))return;
     const data=new ArrayBuffer(12+players.length*PLAYER_BYTES+bullets.length*GLOB_BYTES),v=new DataView(data);
     v.setUint8(0,STATE);v.setUint8(1,PROTOCOL);v.setUint32(2,this.tickNumber);v.setUint32(6,0);v.setUint8(10,players.length);v.setUint8(11,bullets.length);
     let o=12;const num=(at,n,scale)=>v.setInt16(at,Math.round(bounded(n*scale,-32767,32767)));
@@ -152,16 +159,14 @@ export class GameRoom extends DurableObject {
       v.setUint8(o+21,(q.charged?1:0)|(q.rock?2:0));o+=GLOB_BYTES;
     }
     const events=this.combat.events.splice(0);
-    // The player payload is identical for every recipient. Only the input ACK differs.
+    // Each client receives its own ACK and the actors/projectiles within interest range.
     for (const receiver of players) {
-      if (receiver.ws.readyState !== 1 || (receiver.ws.bufferedAmount ?? 0) >= 262144) continue;
-      const snapshot = data.slice(0);
-      new DataView(snapshot).setUint32(6, receiver.seq);
+      if (receiver.ws.readyState !== 1 || (receiver.ws.bufferedAmount ?? 0) >= 8192) continue;
+      const snapshot=NETWORK.interestSnapshot(data,players,bullets,receiver,PLAYER_BYTES,GLOB_BYTES);
       try {
-        receiver.ws.send(snapshot);
+        receiver.ws.send(snapshot);receiver.lastStateTick=this.tickNumber;
         const nearby=events.filter(q=>q.i===receiver.id||q.j===receiver.id||Math.hypot(q.x-receiver.x,q.z-receiver.z)<65);
         if(nearby.length)send(receiver.ws,{t:'fx',events:nearby.slice(-90)});
-        if(this.tickNumber%2===0)send(receiver.ws,this.combat.snapshot(receiver));
       } catch {}
     }
     if(this.combat.rosterDirty){this.combat.rosterDirty=false;this.broadcast({t:'roster',players:this.roster().length,roster:this.roster()});}
@@ -172,12 +177,23 @@ export class GameRoom extends DurableObject {
 export default {
   async fetch(req,env){
     const u=new URL(req.url), origin=req.headers.get('Origin');
-    if(u.pathname==='/health')return response({ok:true,service:'slimo-meadow',protocol:PROTOCOL,maxPlayers:CAP});
+    if(u.pathname==='/health')return response({ok:true,service:'slimo-meadow',protocol:PROTOCOL,duelProtocol:WORLD.duelProtocol,maxPlayers:CAP});
+    if(u.pathname==='/api/slimo/play'||u.pathname.startsWith('/api/slimo/play/'))return serveLiveClient(req);
     const accounts=env.ACCOUNTS.getByName('slimo-accounts');
     if(u.pathname.startsWith('/api/slimo/'))return accounts.fetch(req);
+    if(u.pathname==='/duel'&&req.headers.get('Upgrade')?.toLowerCase()==='websocket'){
+      if(origin!==env.SLIMO_ORIGIN)return response({error:'Origin is not allowed'},403);
+      const auth=await accounts.fetch('https://slimo.internal/internal/duel-relay',{
+        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticket:u.searchParams.get('ticket')})
+      });
+      if(!auth.ok)return response({error:'Duel login expired'},401);
+      const {grant}=await auth.json();
+      const headers=new Headers(req.headers);headers.set('X-Slimo-Duel',JSON.stringify(grant));
+      return env.DUEL_RELAY.getByName(grant.room).fetch(new Request('https://slimo.internal/duel',{headers}));
+    }
     if(u.pathname==='/api/room' && req.method==='GET' && !req.headers.has('Upgrade')){
       if(origin && origin!==env.SLIMO_ORIGIN)return response({error:'Origin is not allowed'},403);
-      return env.GAME_ROOM.getByName('OPEN-MEADOW').fetch(req);
+      return env.GAME_ROOM.getByName('OPEN-MEADOW-regional-v2',{locationHint:env.MEADOW_REGION||'me'}).fetch(req);
     }
     if(u.pathname!=='/room/OPEN-MEADOW'||req.headers.get('Upgrade')?.toLowerCase()!=='websocket')
       return response({error:'Not found'},404);
@@ -190,6 +206,6 @@ export default {
     u.search='';
     const headers=new Headers(req.headers);
     headers.set('X-Slimo-Profile',JSON.stringify(profile));
-    return env.GAME_ROOM.getByName('OPEN-MEADOW').fetch(new Request(u,{headers}));
+    return env.GAME_ROOM.getByName('OPEN-MEADOW-regional-v2',{locationHint:env.MEADOW_REGION||'me'}).fetch(new Request(u,{headers}));
   }
 };

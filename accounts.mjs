@@ -1,4 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
+import './slimo-world.js';
 import { AuthError, hash, opaque, verifyGoogleIdToken } from './google-token.mjs';
 
 const WEEK = 604800;
@@ -76,6 +77,11 @@ export class SlimoAccounts extends DurableObject {
     this.run('INSERT INTO notifications VALUES(?,?,?,?,?,?)',opaque(),recipient,sender,kind,room,Date.now());
     this.run('DELETE FROM notifications WHERE recipient=? AND id NOT IN (SELECT id FROM notifications WHERE recipient=? ORDER BY created DESC LIMIT 50)',recipient,recipient);
   }
+  async relayTicket(room,role,user) {
+    const ticket=opaque();
+    this.put('relay:'+await hash(ticket),{room,role,user,expires:Date.now()+7200000},60);
+    return ticket;
+  }
   async fetch(req) {
     try { return await this.route(req); }
     catch(error) {
@@ -86,6 +92,13 @@ export class SlimoAccounts extends DurableObject {
   async route(req) {
     const path = new URL(req.url).pathname;
     const post = req.method === 'POST', get = req.method === 'GET';
+    if(path === '/internal/duel-relay' && post) {
+      const {ticket}=await body(req);
+      if(!TOKEN.test(ticket||''))fail('Duel login required.',401);
+      const grant=this.get('relay:'+await hash(ticket),true);
+      if(!grant||grant.expires<=Date.now())fail('Duel login expired.',401);
+      return json({grant});
+    }
     if(path === '/internal/meadow' && post) {
       const {ticket} = await body(req);
       if(!TOKEN.test(ticket || '')) fail('Meadow login required.',401);
@@ -96,7 +109,7 @@ export class SlimoAccounts extends DurableObject {
       return json({profile:this.summary(profile)});
     }
     if(post && req.headers.get('Origin') !== this.env.SLIMO_ORIGIN) fail('Open the Slimo website to sign in.',403);
-    if (get && path === '/api/slimo/config') return json({clientId:this.env.GOOGLE_CLIENT_ID || '',workerOrigin:this.env.WORKER_ORIGIN});
+    if (get && path === '/api/slimo/config') return json({clientId:this.env.GOOGLE_CLIENT_ID || '',workerOrigin:this.env.WORKER_ORIGIN,protocols:{meadow:globalThis.SlimoWorld.protocol,duel:globalThis.SlimoWorld.duelProtocol}});
     if (post && path === '/api/slimo/challenge') {
       if(!this.env.GOOGLE_CLIENT_ID) fail('Google sign-in has not been configured.',503);
       const nonce = opaque();
@@ -174,7 +187,11 @@ export class SlimoAccounts extends DurableObject {
       if(!ROOM.test(data.room || '')) fail('Room code is invalid.');
       const existing = this.get('room:'+data.room);
       if(existing && existing.host!==p.id) fail('Room is already registered.',409);
-      this.put('room:'+data.room,{host:p.id},1800);
+      this.put('room:'+data.room,{host:p.id},7200);
+      return json({ok:true,relayTicket:await this.relayTicket(data.room,'host',p.id)});
+    }
+    if(post && path === '/api/slimo/duel/close') {
+      if(this.get('room:'+data.room)?.host===p.id)this.run('DELETE FROM vault WHERE key=?','room:'+data.room);
       return json({ok:true});
     }
     if(post && path === '/api/slimo/duel/invite') {
@@ -199,7 +216,7 @@ export class SlimoAccounts extends DurableObject {
         this.run('INSERT INTO duels(id,room,host,guest,expires) VALUES(?,?,?,?,?)',id,data.room,room.host,p.id,Date.now()+7200000);
         this.put(passKey,{id,host:room.host,guest:p.id,room:data.room},45);
       });
-      return json({pass,id,host:this.summary(this.player(room.host))});
+      return json({pass,id,host:this.summary(this.player(room.host)),relayTicket:await this.relayTicket(data.room,'guest',p.id)});
     }
     if(post && path === '/api/slimo/duel/accept') {
       if(!TOKEN.test(data.pass || '')) fail('The guest must sign in to Slimo.',403);

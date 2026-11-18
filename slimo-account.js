@@ -5,6 +5,7 @@ let slimoWorker = 'https://slimo-meadow.balochnajool.workers.dev';
 let slimoSubmitted = '';
 let slimoNoticeIds = new Set();
 let slimoSocialBusy = false;
+let slimoJoiningNotice = null;
 
 async function slimoApi(path, data) {
   const options = data === undefined ? {} : {
@@ -14,6 +15,10 @@ async function slimoApi(path, data) {
   const answer = await response.json().catch(()=>null);
   if(!response.ok || !answer) throw Error(answer?.error || 'The Slimo account server is unavailable.');
   return answer;
+}
+function slimoVersionMessage(client,server) {
+  if(Number.isInteger(server)&&server>client)return 'Your game is older than the server (game '+client+', server '+server+'). Reload the game.';
+  return 'The Cloudflare Worker needs updating (game '+client+', server '+(Number.isInteger(server)?server:'older release')+'). Deploy the matching Worker, then reload.';
 }
 function slimoStatus(text) { $('accountStatus').textContent = text; }
 function slimoUseProfile(p) {
@@ -126,11 +131,13 @@ function slimoRenderSocial({friends,notifications}) {
     label.textContent=note.kind==='duel' ? note.username+' invited you' : 'Beat the Owner · Atomic unlocked';
     line.append(label);
     if(note.kind==='duel') line.append(slimoAction('Join',async ()=>{
-      if(mode!=='lobby') throw Error('Return to the lobby before joining another fight.');
+      if(pending)return;
+      if(mode!=='lobby')leave();
       closeOverlay(false);
+      slimoJoiningNotice={id:note.id,room:note.room};
       $('joinCode').value=note.room;
       await requestEnter('guest',note.room);
-      if(mode==='guest'||pending?.type==='guest') await slimoApi('notify/read',{id:note.id});
+
     }));
     line.append(slimoAction('Dismiss',async()=>{await slimoApi('notify/read',{id:note.id});line.remove();await slimoRefreshSocial();}));
     list.append(line);
@@ -148,6 +155,12 @@ function slimoRenderSocial({friends,notifications}) {
     list.append(line);
   }
   if(!list.childElementCount) list.textContent='Add a friend by their Slimo username.';
+}
+function slimoCompleteJoin(room) {
+  const notice=slimoJoiningNotice;
+  if(!notice||notice.room!==room)return;
+  slimoJoiningNotice=null;
+  void slimoApi('notify/read',{id:notice.id}).catch(()=>{});
 }
 function slimoOpenSocial() {
   if(!slimoAccount?.username) return;

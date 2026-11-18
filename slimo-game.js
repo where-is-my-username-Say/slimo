@@ -59,7 +59,7 @@ const defaults = {
   sens: 1, sensY: 1, dyn: .35, smooth: .24, inv: false, floating: true, stickSize: 1, dead: .1, btn: 1, btnOp: 1,
   assist: .32, hold: true, autoLock: true, fov: 56, dist: 7.25, shake: prefersReduced ? 0 : .85,
   cinema: !prefersReduced, reduced: prefersReduced, vol: .85, music: .25, sfx: .90, alerts: true, haptic: true,
-  quality: coarse ? 1 : 2, parts: 1, crowd: true, adaptive: false, dmg: true, vig: true, cross: true, fps: false, bot: 1
+  quality: coarse ? 1 : 2, parts: 1, crowd: true, adaptive: true, dmg: true, vig: true, cross: true, fps: false, bot: 1
 };
 function readStore(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
@@ -331,15 +331,16 @@ const skills = {
     { damage: 10, radius: 4.3, text: 'Nova leaves a delayed 10-damage wave in a 4.3 m radius.' }
   ], ['A late pink ripple.', 'Two pink waves cross with confetti.', 'A firework detonates into a pink corona.'])
 };
-const skillIds = Object.keys(skills);
+const passiveSkillIds = Object.keys(skills);
 const WORLD = globalThis.SlimoWorld;
 for (const [id, data] of Object.entries(WORLD.spells)) {
-  skills[id] = skill(data.name, data.group, data.color, data.icon,
-    data.levels.map(level => ({...level,text:level.text+' '+level.cost+' mana · '+level.cooldown+' s cooldown. Open Meadow spell.'})),
+  skills[id] = skill(data.name, 'Arcane', data.color, ({earthwall:'shield',embertrail:'flame',frostbloom:'ice',stormcoil:'bolt',vortex:'echo',stoneburst:'fork',mending:'cross',starfall:'star'})[id],
+    data.levels.map(level => ({...level,text:({earthwall:'Dodge',mending:'Dodge',embertrail:'Slap',stormcoil:'Slap',stoneburst:'Spit',starfall:'Spit',frostbloom:'Nova',vortex:'Nova'})[id]+': '+level.text+' Internal cooldown '+level.cooldown+' s. Roguelike upgrade; uses your existing move.'})),
     ['A ground sigil and a first elemental shape.','More segments, brighter runes and a wider effect.','A complete elemental formation with layered particles.']);
 }
 const allSkillIds = Object.keys(skills);
-const groups = ['Body', 'Slap', 'Spit', 'Dodge & Nova', 'Meadow spells'];
+const skillIds = allSkillIds;
+const groups = ['Body', 'Slap', 'Spit', 'Dodge & Nova', 'Arcane'];
 const stages = [
   { name: 'Warm Sand', note: 'Opening bout. Everyone starts fresh.', color: 0xefbc7d },
   { name: 'Snack Break', note: 'Grab the gold snack to restore 14% of your max HP.', color: 0xffc276 },
@@ -1121,7 +1122,7 @@ const foliageShader = mat => {
 };
 const meadowSun = new T.Vector3(-31, 49, -27);
 const romanSun = sun.position.clone();
-const meadowFog = new T.FogExp2(0x9fb7aa, .0058);
+const meadowFog = new T.FogExp2(0x9fb7aa, .0048);
 const romanFog = scene.fog;
 const groveHemi = new T.Color(0xdbe8d7);
 const groveGroundLight = new T.Color(0x586d60);
@@ -1151,7 +1152,7 @@ const groveSky = addMesh(new T.SphereGeometry(440, 40, 22), new T.ShaderMaterial
     ' float clouds=fb(p+vec2(17.,5.));float base=smoothstep(.49,.65,clouds)*(1.-smoothstep(.46,.72,h))*smoothstep(.035,.13,h);',
     ' float light=smoothstep(.54,.70,fb(p+vec2(17.07,5.12)));',
     ' vec3 cloud=mix(vec3(.71,.83,.84),vec3(1.,.985,.87),light);',
-    ' vec3 sd=normalize(vec3(-.46,.52,-.72));float sunDot=max(0.,dot(v,sd));',
+    ' vec3 sd=normalize(vec3(-31.,49.,-27.));float sunDot=max(0.,dot(v,sd));',
     ' color=mix(color,cloud,base*.97);',
     ' color+=vec3(.22,.12,.035)*pow(sunDot,17.);',
     ' color=mix(color,vec3(1.,.974,.79),smoothstep(.998,.9992,sunDot));',
@@ -1378,34 +1379,6 @@ function inMeadow() {
   return mode === 'lobby' || mode === 'public' || (mode === 'bot' && practiceOptions.arena === 'meadow');
 }
 
-// Low-cost stylized sunbeams (crepuscular rays). One static mesh; no volumetric ray marching.
-const meadowRays = new T.Group();
-groveRoot.add(meadowRays);
-{
-  const positions = [], colors = [];
-  const rayColor = new T.Color(0xffe8bd);
-  for (const [x, z, height, spread] of [[-25, 16, 9, 3.4], [-31, 7, 10, 3.1], [19, -24, 8, 2.7], [28, 18, 9, 3.0]]) {
-    for (let k = 0; k < 3; k++) {
-      const a = k * Math.PI * 2 / 3;
-      const dx = Math.cos(a) * spread, dz = Math.sin(a) * spread;
-      positions.push(x, height, z, x + dx - 3.2, .12, z + dz - 2.4, x - dx - 3.2, .12, z - dz - 2.4);
-      for (let j = 0; j < 3; j++) colors.push(rayColor.r, rayColor.g, rayColor.b);
-    }
-  }
-  const geo = new T.BufferGeometry();
-  geo.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
-  geo.setAttribute('color', new T.Float32BufferAttribute(colors, 3));
-  geo.computeVertexNormals();
-  const mesh = new T.Mesh(geo, new T.MeshBasicMaterial({
-    vertexColors: true, transparent: true, opacity: .052,
-    side: T.DoubleSide, depthWrite: false, blending: T.AdditiveBlending,
-    toneMapped: false
-  }));
-  mesh.frustumCulled = false;
-  meadowRays.add(mesh);
-}
-
-
 // Extra free-roam grove: one instanced canopy batch, no draw call per tree.
 {
   const trunkGeo = new T.CylinderGeometry(.19,.34,3.4,5);
@@ -1423,6 +1396,7 @@ groveRoot.add(meadowRays);
     crowns.setMatrixAt(i,dummy.matrix);
     crowns.setColorAt(i,new T.Color().setHSL(.31+b*.06,.24,.28+b*.1));
   }
+  trunks.castShadow=crowns.castShadow=true;
   trunks.instanceMatrix.needsUpdate=true;crowns.instanceMatrix.needsUpdate=true;
   groveRoot.add(trunks,crowns);
 }
@@ -1509,7 +1483,6 @@ function showEnvironment() {
   activeEnvironment = name;
   const meadow = name === 'meadow';
   groveRoot.visible = meadow;
-  meadowRays.visible = meadow && settings.quality > 0 && !settings.reduced;
   for (const mesh of romanSet) mesh.visible = !meadow;
   scene.fog = meadow ? meadowFog : romanFog;
   scene.background.setHex(meadow ? 0x9fb7aa : 0x594052);
@@ -2157,7 +2130,7 @@ function freshPlayer(slot, previous = {}) {
     r: slot ? -1.4498 : 1.6918, hp: maxHp, maxHp, size: 1 + skillValue({ ranks }, 'colossus', 'size'), ranks, en: 0, dash: 0, dashTime: 0, inv: 0, stun: 0, hit: 0, chain: 0,
     counter: 0, attack: '', attackTime: 0, duration: 0, contactTime: 0, attackAim: 0, struck: false, reflected: false,
     burnTicks: 0, burnDamage: 0, burnClock: 0, chill: 0, chillAmount: 0,
-    guarded: false, secondUsed: false, lastVolley: -1, growth: 0,
+    guarded: false, secondUsed: false, lastVolley: -1, growth: 0, spellCooldowns: {},
     countering: false, combo: 0, comboLanded: false, lastDamage: '',
     active: previous.active ?? (slot === 0),
     hat: previous.hat, accent: previous.accent, owner: previous.owner, spitCharge: 0,
@@ -2180,7 +2153,7 @@ let queued = [{}, {}];
 function event(type, x, z, data = {}) {
   const fx = { id: ++state.serial, type, x, z, ...data };
   state.fx.push(fx);
-  if (['atomic','ownerWave','start', 'dash', 'slap', 'spit', 'splat', 'return', 'nova', 'hit', 'ko', 'perfect', 'pickup', 'skill', 'waveCue', 'wave'].includes(type)) networkDirty = true;
+  if (['atomic','ownerWave','start', 'dash', 'slap', 'spit', 'splat', 'return', 'nova', 'hit', 'ko', 'perfect', 'pickup', 'skill', 'waveCue', 'wave', 'spell'].includes(type)) networkDirty = true;
   if (state.fx.length > 25) state.fx.shift();
   return fx;
 }
@@ -2325,6 +2298,7 @@ function startMove(i, name) {
     event('dash', p.x, p.z, { i, color: p.color, angle: Math.atan2(nx, nz) });
     emitSkill(i, 'swift');
     emitSkill(i, 'phase');
+    triggerRogueSpells(i,'dash',aim);
     return true;
   }
   if (p.attackTime > 0 || (name === 'nova' && p.en < 100)) return false;
@@ -2407,6 +2381,7 @@ function resolveAttack(i, dt) {
     const heading = Math.atan2(dx, dz);
     const delta = angleDiff(p.attackAim, heading);
     const nx = Math.sin(p.attackAim), nz = Math.cos(p.attackAim);
+    triggerRogueSpells(i,name,p.attackAim);
     if (name === 'slap') {
       const heavy = p.combo === 2 || p.countering;
       p.kx += nx * move.lunge;
@@ -2568,7 +2543,7 @@ function contain(p) {
     p.kz *= .45;
   }
   for (const o of runCover()) {
-    if (mode === 'public' && p.air > o.height + .2) continue;
+    if ((mode === 'public'||state.format==='rogue') && p.air > o.height + .2) continue;
     const dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz);
     const min = o.r + .83 * p.size;
     if (d >= min) continue;
@@ -2714,6 +2689,7 @@ function simulate(dt) {
   }
   advanceBullets(dt);
   tickStage(dt);
+  SlimoRogueSpells.tick(state,dt,{damage:damagePlayer,blocked:hasCover});
   if (a.hp <= 0 || b.hp <= 0) finishRound();
   else if ((state.run || mode === 'bot' && state.format === 'classic') && state.timer <= 0) {
     const difference = a.hp / a.maxHp - b.hp / b.maxHp;
@@ -2997,6 +2973,12 @@ function showEffect(q) {
       if (local) callout('Return to sender', 'Spit reflected');
       else word(q, 'NOPE!', '#eccfff');
       break;
+    case 'spell': {
+      const definition=WORLD.spells[q.key];if(!definition)break;
+      playSound(q.key==='mending'?'heal':q.key==='earthwall'?'bounce':'chargeNova',q.x,q.z);
+      word(q,definition.name,'#'+definition.color.toString(16).padStart(6,'0'));
+      break;
+    }
     case 'chargeNova':
       playSound('chargeNova', q.x, q.z);
       shockRing(q.x, .046, q.z, 5.7, .8, 0xffc87c, .39, .70);
@@ -3764,8 +3746,7 @@ addEventListener('keydown', event => {
     return;
   }
   const key = event.key.toLowerCase();
-  if(mode==='public' && /^[1-8]$/.test(key) && !event.repeat){castMeadowSpell(Object.keys(WORLD.spells)[Number(key)-1]);event.preventDefault();return;}
-  if(mode==='public' && key==='m' && !event.repeat){toggleMeadowMap();event.preventDefault();return;}
+    if(mode==='public' && key==='m' && !event.repeat){toggleMeadowMap();event.preventDefault();return;}
   if (key === ' ' && event.target.closest?.('button')) return;
   if (key === 'r' && !event.repeat) lockOn(mode === 'public' ? !publicRoom.locked : !view.lock);
   if (MOVE_KEYS.includes(key) || KEY_ACTION[key]) event.preventDefault();
@@ -4108,14 +4089,19 @@ let lobbyFormat = 'rogue';
 function newRun() {
   return {
     seed: (Math.random() * 4294967296) >>> 0, draft: null, recent: ['', ''],
-    winner: -1, pickup: false, nextPickup: 0, hazard: -1, waves: []
+    winner: -1, pickup: false, nextPickup: 0, hazard: -1, waves: [], spellEffects: [], spellRevision: 0
   };
 }
 function runCover() {
-  if (mode==='public' && publicRoom.cover) return publicRoom.cover;
-  if (inMeadow()) return state.run && stageIndex() === 3 ? meadowPillarCover : meadowCover;
-  return state.format === 'rogue' && stageIndex() === 3 ? pillarRoundCover : cover;
+  if(mode==='public')return meadowCover;
+  const base=inMeadow()?(state.run&&stageIndex()===3?meadowPillarCover:meadowCover):
+    state.format==='rogue'&&stageIndex()===3?pillarRoundCover:cover;
+  return SlimoRogueSpells.cover(state,base);
 }
+function triggerRogueSpells(i,move,aim) {
+  SlimoRogueSpells.trigger(state,i,move,e=>event('spell',e.x,e.z,{i:e.owner,key:e.key,rank:e.rank,color:state.p[e.owner].color}),aim);
+}
+
 function stageIndex(round = state.round) {
   if (round <= 1) return 0;
   if (round > boutTotal()) return 7;
@@ -4252,6 +4238,7 @@ function primeStage() {
   run.nextPickup = [1, 5].includes(stageIndex()) ? 5 : 999;
   run.hazard = -1;
   run.waves.length = 0;
+  run.spellEffects=[];run.spellRevision=(run.spellRevision||0)+1;
   for (const [i, id] of run.recent.entries()) {
     if (id) emitSkill(i, id, state.p[i].x, state.p[i].z, true);
   }
@@ -4674,7 +4661,8 @@ const rankEffects = {
   colossus: 'rise', armor: 'shield', second: 'healing', anchor: 'stomp', leech: 'snack', guard: 'bubble',
   power: 'mitt', reach: 'ribbon', tempo: 'pulse', finisher: 'stars', echo: 'echo', return: 'portal',
   fire: 'ember', frost: 'crystal', fork: 'fan', seeker: 'reticle', speed: 'bolt', boomer: 'pinball',
-  swift: 'stream', phase: 'ghost', counter: 'mark', battery: 'crown', wide: 'sun', after: 'firework'
+  swift: 'stream', phase: 'ghost', counter: 'mark', battery: 'crown', wide: 'sun', after: 'firework',
+  earthwall:'stomp',embertrail:'ember',frostbloom:'crystal',stormcoil:'bolt',vortex:'echo',stoneburst:'fan',mending:'healing',starfall:'stars'
 };
 function skillEffect(q) {
   const { x, z, rank, skill: key } = q;
@@ -4790,12 +4778,12 @@ function skillEffect(q) {
   }
 }
 
-const protocolTag = 5;
+const protocolTag = WORLD.duelProtocol;
 const inputTag = 73;
 const motionTag = 77;
 const INPUT_MS = 33;
 const STATE_MS = 1000 / 30;
-const FULL_MS = 145;
+const FULL_MS = 200;
 const NET_MOTION_LAG = 67;
 const motionFields = ['x', 'z', 'r', 'vx', 'vz', 'kx', 'kz', 'air', 'vy'];
 const receivedMotion = [];
@@ -5039,7 +5027,7 @@ function stopFastChannel() {
 }
 function setupMotionChannel(connection, hostSide, token) {
   const pc = connection.peerConnection;
-  if (!pc?.createDataChannel) return;
+  if (!connection.relay && !pc?.createDataChannel) return;
   function attach(channel) {
     if (token !== netAttempt || link !== connection || motionLink) {
       channel.close();
@@ -5061,6 +5049,7 @@ function setupMotionChannel(connection, hostSide, token) {
     channel.addEventListener('close', close);
     channel.addEventListener('error', close);
   }
+  if(connection.relay){attach(connection.motion);return;}
   if (hostSide) {
     watchedPeerConnection = pc;
     const handlePeerChannel = pc.ondatachannel;
@@ -5078,7 +5067,7 @@ function setupMotionChannel(connection, hostSide, token) {
   }
 }
 function sendFast(buffer) {
-  if (motionLink?.readyState !== 'open' || motionLink.bufferedAmount > 4096) return false;
+  if (motionLink?.readyState !== 'open' || motionLink.bufferedAmount > 1024) return false;
   try {
     motionLink.send(buffer);
     return true;
@@ -5100,11 +5089,11 @@ function copyWireState(now) {
   };
 }
 function broadcastState(now = performance.now()) {
-  if (!link?.open || !welcomed || (link.dataChannel?.bufferedAmount || 0) > 65536) return;
+  if (!link?.open || !welcomed || (link.dataChannel?.bufferedAmount || 0) > 16384) return;
   const fresh = copyWireState(now);
   const paused = !gameReady() || !remoteReady;
   const packet = { t: 'state', tick: simulationTick, ack: lastRemoteSequence, s: { ...fresh, paused } };
-  send(packet);
+  if(!send(packet))return;
   keyframeAt = now;
   keyframePhase = state.phase;
   keyframeRound = state.roundKey;
@@ -5168,7 +5157,7 @@ function tickNet(now = performance.now(), urgent = false) {
   const due = now - frameStateAt >= STATE_MS;
   const paused = !gameReady() || !remoteReady;
   const fast = motionLink?.readyState === 'open' && lastFast && now - lastFast < 500;
-  if (urgent || networkDirty || keyframePhase !== state.phase || keyframeRound !== state.roundKey ||
+  if (urgent || networkDirty && now-keyframeAt>=50 || keyframePhase !== state.phase || keyframeRound !== state.roundKey ||
       now - keyframeAt >= (fast ? FULL_MS : STATE_MS)) {
     broadcastState(now);
   }
@@ -5518,7 +5507,7 @@ let practiceOptions = {
   ai: ['active', 'dummy', 'mirror'].includes(storedPractice.ai) ? storedPractice.ai : 'active',
   difficulty: Number.isInteger(storedPractice.difficulty) ? clamp(storedPractice.difficulty, 0, 2) : settings.bot,
   rivals: ['standard', 'mirror', 'blaze', 'titan', 'phantom'].includes(storedPractice.rivals) ? storedPractice.rivals : 'standard',
-  ranks: cleanBuild(storedPractice.ranks, 72)
+  ranks: cleanBuild(storedPractice.ranks, skillIds.length*3)
 };
 let buildContext = 'practice';
 let editableBuild = {};
@@ -5604,7 +5593,7 @@ function practiceRespawn() {
   startRound();
   return true;
 }
-function buildLimit() { return buildContext === 'room' ? BUILD_POINTS : 72; }
+function buildLimit() { return buildContext === 'room' ? BUILD_POINTS : skillIds.length*3; }
 function openBuild(context) {
   buildContext = context;
   if (context === 'practice') {
@@ -5616,12 +5605,12 @@ function openBuild(context) {
   buildButtons = new Map();
   const grid = $('buildGrid');
   grid.replaceChildren();
-  for (const group of groups.filter(g => context === 'room' || g !== 'Meadow spells')) {
+  for (const group of groups.filter(g => context !== 'room' || g !== 'Arcane')) {
     const section = document.createElement('section');
     const heading = document.createElement('h3');
     heading.textContent = group;
     section.append(heading);
-    for (const key of (context === 'room' ? allSkillIds : skillIds).filter(id => skills[id].group === group)) {
+    for (const key of (context === 'room' ? passiveSkillIds : skillIds).filter(id => skills[id].group === group)) {
       const card = document.createElement('button');
       card.type = 'button';
       card.className = 'build-item';
@@ -5649,8 +5638,8 @@ function openBuild(context) {
     presets.append(button);
   }
   if(context==='room') {
-    const starter=document.createElement('button');starter.type='button';starter.textContent='Spell starter';
-    starter.onclick=()=>{editableBuild={...WORLD.starterBuild};selectedBuildSkill='earthwall';drawBuild();};presets.append(starter);
+    const starter=document.createElement('button');starter.type='button';starter.textContent='Starter';
+    starter.onclick=()=>{editableBuild={...WORLD.starterBuild};selectedBuildSkill='power';drawBuild();};presets.append(starter);
   }
   $('buildAll').hidden = context === 'room';
   setText($('buildTitle'), context === 'room' ? 'Open Meadow build' : 'Practice build');
@@ -5911,7 +5900,11 @@ async function openPublicConnection() {
   if (room.ws && room.ws.readyState < 2) return;
   const entry=++room.entry;
   let ticket;
-  try { ({ticket}=await slimoApi('meadow',{})); }
+  try {
+    const config=await slimoApi('config');
+    if(config.protocols?.meadow!==MEADOW_PROTOCOL)throw Error(slimoVersionMessage(MEADOW_PROTOCOL,config.protocols?.meadow));
+    ({ticket}=await slimoApi('meadow',{}));
+  }
   catch(error){ if(mode==='public'&&entry===room.entry) leave(error.message); return; }
   if(mode!=='public'||entry!==room.entry||meadowSuspended||document.hidden) return;
   const path = new URL('/room/OPEN-MEADOW', slimoWorker);
@@ -5940,7 +5933,7 @@ async function openPublicConnection() {
     let packet;
     try { packet = JSON.parse(event.data); } catch { return; }
     if (!packet || typeof packet !== 'object') return;
-    if (packet.t === 'error') return leave(typeof packet.message === 'string' ? packet.message : 'The room is unavailable.');
+    if (packet.t === 'error') return leave(Number.isInteger(packet.serverProtocol)?slimoVersionMessage(MEADOW_PROTOCOL,packet.serverProtocol):typeof packet.message === 'string' ? packet.message : 'The room is unavailable.');
     if ((packet.t === 'roster' || packet.t === 'joined') && Array.isArray(packet.roster) && packet.roster.length <= ROOM_CAP) {
       if (packet.t === 'joined') {
         clearTimeout(room.timeout);
@@ -5990,11 +5983,6 @@ async function openPublicConnection() {
         room.events.push(q);
       }
       if (room.events.length > 200) room.events.splice(0, room.events.length - 200);
-    } else if (packet.t === 'magic') {
-      acceptMeadowMagic(packet);
-    } else if (packet.t === 'castResult') {
-      if(packet.ok){room.spellPending?.delete(packet.key);if(room.magic)room.magic.mana=packet.mana;}
-      else {room.spellPending?.delete(packet.key);toast(packet.message || 'Spell is not ready.');}
     } else if (packet.t === 'atomic') {
       if(room.roster.has(packet.i)) startAtomic(packet.i);
     } else if (packet.t === 'voiceSignal') {
@@ -6133,16 +6121,14 @@ function roomInput() {
   return input;
 }
 function sendRoomInput(force = false) {
-  const room = publicRoom, now = performance.now();
-  if (!room.id || room.ws?.readyState !== 1 || !force && now - room.lastSend < 33 || room.ws.bufferedAmount > 65536) return;
-  const input = roomInput();
-  room.ws.send(inputPacket(input, ++room.sequence));
-  room.lastSend = now;
-  if (now - room.lastPing > 1700) {
-    room.lastPing = now;
-    room.ws.send(JSON.stringify({ t: 'ping', stamp: now }));
-  }
+  const room=publicRoom,now=performance.now();
+  if(!room.id||room.ws?.readyState!==1||room.ws.bufferedAmount>256)return;
+  const input=roomInput(),key=SlimoNetwork.inputKey(input);
+  if(!SlimoNetwork.inputDue(now,room.lastSend,key,room.lastInputKey,input,room.prediction,force))return;
+  room.ws.send(inputPacket(input,++room.sequence));room.lastSend=now;room.lastInputKey=key;
+  if(now-room.lastPing>1700){room.lastPing=now;room.ws.send(JSON.stringify({t:'ping',stamp:now}));}
 }
+
 function dropRoomModel(id) {
   const room = publicRoom;
   const pc = roomVoice.peers.get(id);
@@ -6231,7 +6217,8 @@ function animatePublic(dt, time) {
     else if (p.emote) p.emoteAge += step;
     drivePlayer(p, input, step);
     if (!p.attack && p.stun <= 0 && input.ready) p.r = input.aim;
-    room.history.push({ sequence: room.sequence + 1, input, dt: step });
+    if(!SlimoNetwork.stationary(input,p))room.history.push({ sequence: room.sequence + 1, input, dt: step });
+    else room.history.length=0;
     if (room.history.length > 40) room.history.shift();
   }
   state.p[0] = { ...p, active: true, hat:slimoAccount?.hat, accent:slimoAccount?.accent, owner:slimoAccount?.owner };
@@ -6245,7 +6232,7 @@ function animatePublic(dt, time) {
     for (const [id, meta] of room.roster) {
       if (id === room.id) continue;
       const pose = interpolatePublic(id);
-      if (!pose) continue;
+      if (!pose) { if(room.models.has(id))dropRoomModel(id); continue; }
       const range = Math.hypot(pose.x - p.x, pose.z - p.z);
       if (range > 47) { dropRoomModel(id); continue; }
       let model = room.models.get(id);
@@ -6290,7 +6277,7 @@ function drawPublicHud() {
     label.classList.toggle('target', id === room.target && room.locked);
   }
   drawRoomBubbles();
-  drawMeadowMagicHud();
+  drawMeadowMapHud();
 }
 
 const ROOM_CHAT_VISIBLE = 8000;
@@ -6495,7 +6482,6 @@ function publicSocialKey(event) {
 }
 
 const PROTOCOL = protocolTag;
-const ROOM_TYPE = 'slimo-friend-duel-v5';
 let peer = null, link = null, roomId = '', netAttempt = 0;
 let peerTimer = 0, lastRemote = 0, lastSnapshot = 0;
 let remoteReady = true;
@@ -6511,14 +6497,16 @@ function parseRoom(value) {
   return /^rome-[a-zA-Z0-9_-]{6,80}$/.test(code) ? code : '';
 }
 function send(packet) {
-  if (!link?.open) return;
-  try { link.send(packet); } catch { /* The connection handler owns recovery. */ }
+  if (!link?.open) return false;
+  if(['input','state'].includes(packet.t)&&(link.dataChannel?.bufferedAmount||0)>(packet.t==='input'?1024:16384))return false;
+  try { link.send(packet);return true; } catch { return false; }
 }
 function clearPeer() {
   netAttempt++;
   clearTimeout(peerTimer);
   stopFastChannel();
   const currentLink = link, currentPeer = peer;
+  if(mode==='host'&&roomId)void slimoApi('duel/close',{room:roomId}).catch(()=>{});
   link = peer = null;
   welcomed = false;
   slimoDuel=slimoGuestGrant=null;
@@ -6578,67 +6566,37 @@ function dropRival(message = 'Your rival left. The room is still open.') {
 function failConnection(message) {
   if (mode !== 'lobby') leave(message);
 }
-function connect(type, target) {
-  if (!window.Peer) {
-    failConnection('Friend duels are unavailable here. Practice is ready to play.');
-    return;
-  }
-  const token = ++netAttempt;
-  roomId = type === 'guest' ? target : '';
-  slimoDuel=null;
-  welcomed = false;
-  try { peer = new window.Peer(undefined, { debug: 0 }); }
-  catch {
-    failConnection('This browser could not start a friend duel.');
-    return;
-  }
-  peerTimer = setTimeout(() => {
-    if (token === netAttempt && !welcomed) failConnection('The room service did not respond. Try again or play practice.');
-  }, 18000);
-  peer.on('open', async id => {
-    if (token !== netAttempt) return;
-    if (type === 'host') {
-      clearTimeout(peerTimer);
-      roomId = 'rome-' + id;
-      try { await slimoApi('duel/open',{room:roomId}); }
-      catch(error){ if(token===netAttempt) failConnection(error.message); return; }
-      if(token===netAttempt && !link?.open) openShare();
-    } else if (!link) {
-      const connection = peer.connect(target.slice(5), { reliable: true, serialization: 'json', metadata: { game: ROOM_TYPE } });
-      if (connection) attach(connection, false, token);
-      else failConnection('Could not open that room.');
-    }
-  });
-  peer.on('connection', connection => {
-    if (token !== netAttempt || type !== 'host') {
-      connection.close();
-      return;
-    }
-    if (connection.metadata?.game !== ROOM_TYPE || link) {
-      const reason = connection.metadata?.game !== ROOM_TYPE ? 'version' : 'full';
-      connection.on('open', () => {
-        try { connection.send({ t: reason }); } catch { /* The guest will see a disconnect. */ }
-        setTimeout(() => connection.close(), 220);
-      });
-      return;
-    }
-    attach(connection, true, token);
-  });
-  peer.on('error', error => {
-    if (token !== netAttempt) return;
-    if (link?.open) {
-      toast('Room service interrupted. The direct connection is still open.');
-      return;
-    }
-    failConnection(error.type === 'peer-unavailable' ? 'That room is closed. Ask for a fresh invite.' :
-      'Could not connect. Check your internet connection or play practice.');
-  });
-  peer.on('disconnected', () => {
-    if (token === netAttempt && peer && !peer.destroyed) {
-      try { peer.reconnect(); } catch { /* The timeout handles a failed attempt. */ }
-    }
-  });
+async function connect(type, target) {
+  const token=++netAttempt;
+  roomId=type==='guest'?target:'rome-'+crypto.randomUUID();
+  slimoDuel=null;welcomed=false;
+  peerTimer=setTimeout(()=>{
+    if(token===netAttempt&&!peer?.connected)failConnection('The duel server did not respond. Try again.');
+  },18000);
+  try {
+    // Authorize after orientation/fullscreen is ready, not while a phone waits
+    // at the rotate screen. Every attempt gets a fresh single-use relay ticket.
+    const grant=await slimoApi(type==='host'?'duel/open':'duel/join',{room:roomId});
+    if(token!==netAttempt)return;
+    if(!grant.relayTicket)throw Error('Friend duels need the latest Slimo Worker. Deploy the Worker and reload both games.');
+    if(type==='guest')slimoGuestGrant=grant;
+    const url=new URL('/duel',slimoWorker);url.protocol=url.protocol==='https:'?'wss:':'ws:';
+    url.searchParams.set('ticket',grant.relayTicket);
+    peer=SlimoDuelTransport.create({url:url.href,hostSide:type==='host',
+      onReady(){
+        if(token!==netAttempt)return;
+        clearTimeout(peerTimer);
+        if(type==='host'&&!link?.open)openShare();
+      },
+      onConnection(connection){
+        if(token!==netAttempt){connection.close();return;}
+        attach(connection,type==='host',token);
+      },
+      onError(message){if(token===netAttempt)failConnection(message);}
+    });
+  }catch(error){if(token===netAttempt)failConnection(error.message);}
 }
+
 function attach(connection, hostSide, token) {
   link = connection;
   lastRemote = lastSnapshot = performance.now();
@@ -6656,8 +6614,8 @@ function attach(connection, hostSide, token) {
     }
     lastRemote = lastSnapshot = performance.now();
     if (hostSide) setupMotionChannel(connection, true, token);
-    send({ t: 'hello', version: PROTOCOL, name: profile.name, color: chosen, ready: gameReady(),
-      motion: hostSide && watchedPeerConnection === connection.peerConnection && !!watchMotionChannel,
+    if(!hostSide)send({ t: 'hello', version: PROTOCOL, name: profile.name, color: chosen, ready: gameReady(),
+      motion: hostSide && (connection.relay || watchedPeerConnection === connection.peerConnection && !!watchMotionChannel),
       pass: hostSide ? undefined : slimoGuestGrant?.pass });
   });
   connection.on('data', async packet => {
@@ -6707,8 +6665,14 @@ function attach(connection, hostSide, token) {
         if (['shareOverlay','friendsOverlay'].includes(activeOverlay)) closeOverlay();
         restartMatch();
         state.paused = !gameReady() || !remoteReady;
+        // A host hello confirms backend authorization, rather than merely a
+        // socket opening. The guest must not enter a match that was rejected.
+        send({t:'hello',version:PROTOCOL,ready:gameReady(),motion:!!motionLink});
         broadcastState();
-      } else if (packet.motion === true) setupMotionChannel(connection, false, token);
+      } else {
+        if(packet.motion===true)setupMotionChannel(connection,false,token);
+        slimoCompleteJoin(roomId);
+      }
       return;
     }
     if (!welcomed) return;
@@ -6746,7 +6710,7 @@ function attach(connection, hostSide, token) {
   connection.on('error', end);
 }
 const phases = ['waiting', 'countdown', 'fight', 'round', 'draft', 'over'];
-const eventTypes = ['atomic','ownerWave','start', 'wind', 'slap', 'chargeSpit', 'spit', 'splat', 'dash', 'perfect', 'return', 'chargeNova', 'nova', 'hit', 'land', 'ko', 'skill', 'waveCue', 'wave', 'pickup', 'hazard', 'burn'];
+const eventTypes = ['spell','atomic','ownerWave','start', 'wind', 'slap', 'chargeSpit', 'spit', 'splat', 'dash', 'perfect', 'return', 'chargeNova', 'nova', 'hit', 'land', 'ko', 'skill', 'waveCue', 'wave', 'pickup', 'hazard', 'burn'];
 const validColor = n => Number.isInteger(n) && n >= 0 && n < palette.length;
 const validSlot = n => n === 0 || n === 1;
 const validPoint = p => p && Number.isFinite(p.x) && Number.isFinite(p.z) && Math.abs(p.x) < 100 && Math.abs(p.z) < 100;
@@ -6761,7 +6725,7 @@ function validSnapshot(s) {
       !s.rematch.every(n => typeof n === 'boolean')) return false;
   if (s.format === 'rogue') {
     const run = s.run;
-    if (!run || !Number.isInteger(run.seed) || ![-1, 0, 1].includes(run.winner) || typeof run.pickup !== 'boolean' ||
+    if (!run || !SlimoRogueSpells.validEffects(run.spellEffects) || !Number.isInteger(run.seed) || ![-1, 0, 1].includes(run.winner) || typeof run.pickup !== 'boolean' ||
         !Array.isArray(run.recent) || run.recent.length !== 2 || !run.recent.every(k => k === '' || Object.hasOwn(skills, k)) ||
         !Array.isArray(run.waves) || run.waves.length > 12 || !run.waves.every(w => validPoint(w) &&
           ['echo', 'after'].includes(w.id) && Number.isFinite(w.radius) && Number.isFinite(w.delay)) || s.round > 8) return false;
@@ -6785,6 +6749,7 @@ function validSnapshot(s) {
       ['fire', 'frost', 'seeker', 'fork', 'cannon'].every(k => [0, 1, 2, 3].includes(q[k] ?? 0)))) return false;
   return s.fx.every(q => {
     if (!validPoint(q) || !eventTypes.includes(q.type) || !Number.isSafeInteger(q.id)) return false;
+    if(q.type==='spell')return validSlot(q.i)&&Object.hasOwn(WORLD.spells,q.key)&&[1,2,3].includes(q.rank)&&validColor(q.color);
     if (q.type === 'start') return true;
     if (!validColor(q.color)) return false;
     if (['hit', 'ko'].includes(q.type) && (!validSlot(q.i) || !Number.isFinite(q.nx) || !Number.isFinite(q.nz) || !Number.isFinite(q.height))) return false;
@@ -6876,13 +6841,6 @@ async function requestEnter(type, code = '', format = lobbyFormat) {
   pending = { type, code, format, ready: false };
   updateOrientation();
   const openScreen=fullscreen();
-  if(type==='guest'){
-    try { slimoGuestGrant=await slimoApi('duel/join',{room:code}); }
-    catch(error) {
-      if(request===entryNonce){pending=null;updateOrientation();setStatus(error.message);}
-      return;
-    }
-  }
   await openScreen;
   if (request !== entryNonce || !pending) return;
   pending.ready = true;
@@ -7094,7 +7052,8 @@ safeZone.rotation.x = -Math.PI / 2;
 safeZone.visible = false;
 meadowExpansion=SlimoMeadowMap.create(T,groveRoot,WORLD);
 magicView=SlimoMagicVfx.create(T,scene,WORLD);
-prepareMeadowMagicControls();
+prepareMeadowMapControls();
+const sunLighting=SlimoSunlight.create(T,renderer,scene,camera,sun);
 prepareLobby();
 prepareSocialControls();
 applySettings();
@@ -7139,8 +7098,7 @@ function frame(now) {
 
   meadowExpansion.visible = inMeadow();
   if(meadowExpansion.visible)meadowExpansion.update(state.p[localSlot],worldTime,settings);
-  magicView.update(mode==='public'?publicRoom.magic:null,performance.now(),state.p[localSlot],settings);
-  $('meadowMagic').hidden=mode!=='public';
+  magicView.update(state.format==='rogue'&&mode!=='public'&&state.run?{effects:state.run.spellEffects||[],receivedAt:mode==='guest'&&!state.paused?lastSnapshot:performance.now()}:null,performance.now(),state.p[localSlot],settings);
   $('meadowMapPanel').hidden=mode!=='public'||!meadowMapOpen;
   const vdt = visualDelta(Math.min(.068, dt));
   worldTime += vdt;
@@ -7170,7 +7128,8 @@ function frame(now) {
   drawSlimoFinish(now);
   drawSlimoImpact(now);
   drawAtomic(now);
-  renderer.render(scene, camera);
+  if(inMeadow())groveSky.position.copy(camera.position);
+  sunLighting.render({meadow:inMeadow(),player:state.p[localSlot],sunOffset:meadowSun,quality:settings.quality,reduced:settings.reduced});
   requestAnimationFrame(frame);
 }
 slimoInitAccount();

@@ -4,14 +4,19 @@
   "main": "worker.js",
   "compatibility_date": "2026-11-15",
   "vars": {
+    "MEADOW_REGION": "me",
     "SLIMO_ORIGIN": "https://slimo-ten.vercel.app",
     "WORKER_ORIGIN": "https://slimo-meadow.balochnajool.workers.dev"
   },
   "durable_objects": {
     "bindings": [
       { "name": "GAME_ROOM", "class_name": "GameRoom" },
-      { "name": "ACCOUNTS", "class_name": "SlimoAccounts" }
+      { "name": "ACCOUNTS", "class_name": "SlimoAccounts" },
+      { "name": "DUEL_RELAY", "class_name": "DuelRelay" }
     ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom", "SlimoAccounts"] }]
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["GameRoom", "SlimoAccounts"] },
+    { "tag": "v2", "new_sqlite_classes": ["DuelRelay"] }
+  ]
 }
