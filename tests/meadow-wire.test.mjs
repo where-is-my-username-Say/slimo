@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {MeadowCombat} from '../slimo-meadow-combat.js';
+import '../slimo-network.js';
 const W=globalThis.SlimoWorld;
 const source=readFileSync(new URL('../slimo-game.js',import.meta.url),'utf8');
 const wire=source.slice(source.indexOf('const ROOM_CAP ='),source.indexOf('let renderer;'));
@@ -14,7 +15,7 @@ function room() {
   let source=readFileSync(new URL('../worker.js',import.meta.url),'utf8');
   source=source.replace(/^import .*;\n/gm,'').replace(/^export \{[^\n]+\n/gm,'').replace('export class GameRoom','class GameRoom');
   source=source.slice(0,source.indexOf('export default'));
-  const context=vm.createContext({console,MeadowCombat,globalThis:{SlimoWorld:W},ArrayBuffer,DataView,Date,Math,Map,Set,Number,JSON,Blob,
+  const context=vm.createContext({console,MeadowCombat,globalThis:{SlimoWorld:W,SlimoNetwork:globalThis.SlimoNetwork},ArrayBuffer,DataView,Date,Math,Map,Set,Number,JSON,Blob,
     setInterval:()=>1,clearInterval(){},DurableObject:class{constructor(ctx){this.ctx=ctx;}}});
   const Room=vm.runInContext(source+'\nGameRoom',context);
   const r=new Room({getWebSockets:()=>[]},{}),sent=[];
@@ -53,10 +54,20 @@ test('Worker rejects mid-ring build changes and clamps safe-zone builds',async()
   const {r,p,ws,sent}=room();
   await r.webSocketMessage(ws,JSON.stringify({t:'build',ranks:{earthwall:3}}));assert.equal(p.ranks.earthwall,undefined);
   assert.equal(JSON.parse(sent.at(-1)).ok,false);
-  p.x=30;await r.webSocketMessage(ws,JSON.stringify({t:'build',ranks:{earthwall:99,starfall:3,unknown:3}}));
-  assert.equal(p.ranks.earthwall,3);assert.equal(p.ranks.unknown,undefined);
+  p.x=30;await r.webSocketMessage(ws,JSON.stringify({t:'build',ranks:{earthwall:99,power:99,starfall:3,unknown:3}}));
+  assert.equal(p.ranks.earthwall,undefined);assert.equal(p.ranks.power,3);assert.equal(p.ranks.unknown,undefined);
 });
 test('old clients are not accepted under a mismatched layout',()=>{
   const {run,context}=codec();const data=new ArrayBuffer(12);new DataView(data).setUint8(0,55);new DataView(data).setUint8(1,3);context.data=data;
   assert.equal(run('decodeRoomState(data)'),null);
+});
+
+test('real Worker emits five steady idle snapshots per second and still sends its first state immediately',()=>{
+ const {r,sent}=room();for(let i=0;i<20;i++)r.tick();
+ assert.equal(sent.filter(x=>x instanceof ArrayBuffer).length,6);
+ assert.equal(r.tickNumber,20);assert.ok(Math.abs(r.combat.time-1)<1e-9);
+});
+test('real Worker keeps 20 Hz state delivery while movement is active',()=>{
+ const {r,p,sent}=room();p.ix=1;for(let i=0;i<20;i++){p.inputAt=Date.now();r.tick();}
+ assert.equal(sent.filter(x=>x instanceof ArrayBuffer).length,20);assert.ok(p.x>1);
 });

@@ -28,7 +28,7 @@ test('all eight spells have three actual upgrade ranks and a valid starter build
     assert.ok(definition.levels[2].cooldown<definition.levels[0].cooldown);
     assert.ok(definition.levels.every(l=>l.cost>0&&l.duration>0));
   }
-  assert.equal(Object.keys(W.cleanBuild(W.starterBuild)).filter(k=>W.spells[k]).length,8);
+  assert.equal(Object.keys(W.cleanBuild(W.starterBuild)).filter(k=>W.spells[k]).length,0);
   assert.ok(Object.values(W.cleanBuild(W.starterBuild)).reduce((a,b)=>a+b,0)<=18);
 });
 test('normal slaps outside the ring produce tap feedback without damage or knockback', () => {
