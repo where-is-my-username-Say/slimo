@@ -164,7 +164,7 @@ function slimoActivateEmote(key) {
     atomicRequested=now;
     if(mode==='public')publicRoom.ws?.send(JSON.stringify({t:'emote',key}));
     else if(mode==='guest')send({t:'slimoEmote',key});
-    else if(mode==='host'){event('atomic',0,0,{i:0,color:chosen});broadcastState();}
+    else if(mode==='host'){const castId=startAtomic(0);event('atomic',0,0,{i:0,color:chosen,castId});broadcastState();}
     else startAtomic(localSlot);
   }else{
     if(mode==='guest')send({t:'slimoEmote',key});

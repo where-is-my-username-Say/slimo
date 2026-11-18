@@ -21,7 +21,7 @@ test('cinematic Atomic animates all phases on the game Three r128 in normal and 
  for(const reduced of [false,true]){
   const h=harness(reduced),duration=h.run('ATOMIC_CONFIG.durationSeconds');h.run('startAtomic(0)');
   for(const fraction of [0,.2,.45,.52,.6,.85,.999]){h.run(`drawAtomic(${1000+duration*fraction*1000})`);assert.equal(h.run('atomicEffects.size'),1);assertFinite(h);}
-  h.run(`drawAtomic(${1000+duration*1000})`);assert.equal(h.run('atomicEffects.size'),0);assert.equal(h.run('atomicAssets.refs'),0);assert.equal(h.run('atomicAssets.tex'),null);
+  h.run(`drawAtomic(${1000+duration*1000})`);assert.equal(h.run('atomicEffects.size'),0);assert.equal(h.run('atomicAuras.size'),1);h.run('clearAllAtomic()');assert.equal(h.run('atomicAssets.refs'),0);assert.equal(h.run('atomicAssets.tex'),null);
  }
 });
 test('cinematic stages show charge, implosion, blast and aftermath without affecting combat',()=>{
@@ -43,7 +43,7 @@ test('Atomic config edits control duration, seal colors, GPU particles and reduc
 test('overlapping casts share textures until the last cast ends and reject duplicate starts',()=>{
  const h=harness();h.run('startAtomic(0);startAtomic(1);startAtomic(0);let textureDisposals=0;Object.values(atomicAssets.tex).forEach(t=>t.addEventListener("dispose",()=>textureDisposals++));const first=[...atomicEffects.entries()][0];clearAtomicEffect(...first)');
  assert.equal(h.run('atomicEffects.size'),1);assert.equal(h.run('atomicAssets.refs'),1);assert.equal(h.run('textureDisposals'),0);
- h.run('drawAtomic(17000)');assert.equal(h.run('atomicAssets.refs'),0);assert.equal(h.run('textureDisposals'),5);assert.equal(h.run('scene.children.length'),0);
+ h.run('drawAtomic(17000);clearAllAtomic()');assert.equal(h.run('atomicAssets.refs'),0);assert.equal(h.run('textureDisposals'),5);assert.equal(h.run('scene.children.length'),0);
 });
 test('Atomic releases geometry/materials on expiry, mode change and a Meadow caster leaving',()=>{
  const h=harness();h.run(`startAtomic(0);let disposed=0;const resources=new Set();[...atomicEffects.values()][0].group.traverse(o=>{if(o.geometry&&!o.isSprite)resources.add(o.geometry);if(o.material)resources.add(o.material);});for(const resource of resources)resource.addEventListener('dispose',()=>disposed++);drawAtomic(17000)`);
@@ -55,7 +55,32 @@ test('only the standalone Atomic implementation loads and both multiplayer event
  const html=read('index.html'),game=read('slimo-game.js'),cinematics=read('slimo-cinematics.js');
  assert.equal([...html.matchAll(/src="\.\/slimo-atomic.js"/g)].length,1);assert.ok(html.indexOf('./slimo-atomic.js')<html.indexOf('./slimo-game.js'));
  assert.doesNotMatch(cinematics,/function (makeAtomicEffect|drawAtomic|startAtomic|clearAtomicEffect)\(/);
- assert.match(game,/packet.t === 'atomic'[\s\S]{0,100}startAtomic\(packet.i\)/);
- assert.match(game,/case 'atomic':[\s\S]{0,220}startAtomic\(q.i\)/);
+ assert.match(game,/packet.t === 'atomic'[\s\S]{0,100}startAtomic\(packet.i,packet.castId,packet.ageMs\)/);
+ assert.match(game,/case 'atomic':[\s\S]{0,220}startAtomic\(q.i,q.castId\)/);
  assert.match(cinematics,/mode==='public'\)publicRoom.ws\?\.send/);assert.match(cinematics,/mode==='guest'\)send\(\{t:'slimoEmote',key\}\)/);
+});
+
+test('Atomic is triple size and its aura survives real round cleanup and hours of play',()=>{
+ const h=harness();h.run('startAtomic(0,100);drawAtomic(2000)');
+ assert.ok(Math.abs(h.run('[...atomicEffects.values()][0].group.scale.x')-3.6)<1e-8);
+ h.run('drawAtomic(18000)');assert.equal(h.run('atomicAuras.size'),1);assertFinite(h);
+ // Execute the actual cleanup called by rounds/rematches, with unrelated FX empty.
+ h.run(`const moving=[],splashes=[],marks=[],bits=[],globModels=new Map();let magicView=null,slimoFinish,slimoImpact,lastEvent,lastRoundKey,hitFreeze,hurtTint,impactTint,calloutTime,startBanner,reticleFlash;const $=()=>({});document.body={dataset:{}};`);
+ const game=read('slimo-game.js');h.run(game.slice(game.indexOf('function clearFx('),game.indexOf('const globInk')));
+ h.run('clearFx();drawAtomic(3601000)');assert.equal(h.run('atomicAuras.size'),1);assert.equal(h.run('atomicSessions.size'),1);assertFinite(h);
+ h.run("mode='lobby';drawAtomic(3602000)");assert.equal(h.run('atomicAuras.size'),0);assert.equal(h.run('atomicSessions.size'),0);assert.equal(h.run('scene.children.length'),0);assert.equal(h.run('atomicAssets.refs'),0);
+});
+test('authoritative snapshots recover missed casts and late-join auras without replaying or resetting them',()=>{
+ const h=harness();h.run("mode='guest';syncAtomicSessions([{i:0,castId:50,ageMs:9000}]);drawAtomic(1000)");
+ assert.equal(h.run('atomicEffects.size'),1);assert.equal(h.run('[...atomicEffects.values()][0].pillar.visible'),true);
+ h.run('syncAtomicSessions([{i:0,castId:50,ageMs:10000}])');assert.equal(h.run('[...atomicSessions.values()][0].started'),-8000);
+ h.run('syncAtomicSessions([{i:0,castId:51,ageMs:16000}]);drawAtomic(2000)');assert.equal(h.run('atomicEffects.size'),0);assert.equal(h.run('atomicAuras.size'),1);
+ h.run('syncAtomicSessions([{i:4,castId:90,ageMs:0},{i:0,castId:NaN,ageMs:0}]);drawAtomic(3000)');assert.equal(h.run('atomicSessions.size'),0);assert.equal(h.run('atomicAuras.size'),0);
+});
+test('a persistent aura can recast Atomic, keeps textures shared and clears only the departing caster',()=>{
+ const h=harness();h.run('startAtomic(0,1);startAtomic(1,2);drawAtomic(18000)');assert.equal(h.run('atomicAuras.size'),2);
+ h.run('startAtomic(0,3);drawAtomic(2000)');assert.equal(h.run('atomicEffects.size'),1);assert.equal(h.run('atomicAuras.get("bot:0").group.visible'),false);
+ h.run('drawAtomic(18000)');assert.equal(h.run('atomicAuras.size'),2);assert.equal(h.run('atomicEffects.size'),0);
+ h.run('clearAtomicCaster(1)');assert.equal(h.run('atomicSessions.size'),1);assert.equal(h.run('atomicAuras.size'),1);
+ h.run('clearAllAtomic()');assert.equal(h.run('atomicAssets.refs'),0);assert.equal(h.run('scene.children.length'),0);
 });

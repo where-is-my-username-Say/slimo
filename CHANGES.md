@@ -1,3 +1,12 @@
+# Stronger dodge + triple-size Atomic with a session aura
+
+- Strengthened all three dodge-upgrade ranks and aligned browser/Worker values.
+- Fixed Meadow invulnerability being cut short when dash movement ends.
+- Enlarged the entire Atomic cinematic to 3x and added a persistent violet aura.
+- Kept Atomic state through rounds/rematches; clear it only on leaving/removing a caster.
+- Resynchronized missed casts through host keyframes and Meadow session state.
+- 101 tests pass, covering late joins, missed events, recasts, cleanup and actual upgraded protection.
+
 # Exact cinematic Atomic + flat upload package
 
 - Replaced the previous Atomic effect with the exact uploaded `slimo-atomic.js`.

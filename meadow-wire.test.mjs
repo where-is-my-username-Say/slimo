@@ -79,7 +79,18 @@ test('Worker authorizes Atomic, enforces cooldown and broadcasts the same cast t
  await r.webSocketMessage(ws,request);assert.equal(sent.length,0);assert.equal(observer.length,0);
  p.profile.atomic=true;const hp=p.hp;
  await r.webSocketMessage(ws,request);
- assert.deepEqual(JSON.parse(sent.at(-1)),{t:'atomic',i:1});assert.equal(observer.at(-1),sent.at(-1));assert.equal(p.hp,hp);
+ const cast=JSON.parse(sent.at(-1));assert.equal(cast.t,'atomic');assert.equal(cast.i,1);assert.equal(cast.castId,p.atomicAt);assert.ok(cast.ageMs>=0&&cast.ageMs<1000);assert.equal(observer.at(-1),sent.at(-1));assert.equal(p.hp,hp);
  const count=sent.length;await r.webSocketMessage(ws,request);assert.equal(sent.length,count);
  p.atomicAt-=20001;await r.webSocketMessage(ws,request);assert.equal(sent.length,count+1);
+});
+
+test('Worker retains Atomic aura state for late joiners and periodically repairs missed cast events',async()=>{
+ const {r,p,ws,sent}=room();p.profile.atomic=true;p.atomicAt=0;
+ await r.webSocketMessage(ws,JSON.stringify({t:'emote',key:'atomic'}));
+ assert.equal(r.roster()[0].atomic.castId,p.atomicAt);
+ p.atomicAt-=17000;assert.equal(r.roster()[0].atomic.ageMs,16000);
+ for(let i=0;i<40;i++)r.tick();
+ const repair=sent.filter(x=>typeof x==='string').map(JSON.parse).find(p=>p.t==='atomicState');
+ assert.ok(repair);assert.equal(repair.casts[0].i,1);assert.equal(repair.casts[0].ageMs,16000);
+ r.leave(ws);assert.equal(r.roster().length,0);
 });

@@ -1,11 +1,8 @@
-Exact cinematic Atomic + complete flat game
+Dodge upgrades + persistent Atomic
 
-The uploaded slimo-atomic.js replaces the previous effect unchanged.
-Meadow authorizes casts on the server; friend duels relay them to the host.
-95 automated checks pass, including animation phases, cleanup, server cooldown
-and relay delivery. All seven Atomic GPU shader programs compile and link.
-Live two-player phone rendering and FPS still require device testing.
-
-All supplied files belong together beside index.html. No subfolders are needed.
-Use DEPLOY-FROM-PHONE.md for upload and future server deployment instructions.
-The slime model and basic fight behavior are preserved.
+Atomic uses the uploaded cinematic at 3x size, followed by an aura until leaving.
+The aura survives rounds/rematches and is synchronized for other players.
+Missed cast events recover through host snapshots and Meadow session refreshes.
+Dodge upgrade ranks are stronger; Meadow honors full Ghost Dodge invulnerability.
+101 tests pass. Actual two-player phone rendering/FPS still need device testing.
+All game files are directly beside index.html, with no subfolders required.

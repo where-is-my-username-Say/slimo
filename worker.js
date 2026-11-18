@@ -25,7 +25,8 @@ export class GameRoom extends DurableObject {
     }
     this.loop=null; this.combat=new MeadowCombat(this.players);
   }
-  roster(){return [...this.players.values()].filter(p=>p.joined).map(p=>({id:p.id,name:p.name,color:p.color,ranks:p.ranks,wins:p.wins||0,hat:p.profile.hat,accent:p.profile.accent,owner:p.profile.owner}));}
+  atomicState(p){return p.atomicAt ? {castId:p.atomicAt,ageMs:Math.min(16000,Math.max(0,Date.now()-p.atomicAt))} : null;}
+  roster(){return [...this.players.values()].filter(p=>p.joined).map(p=>({id:p.id,name:p.name,color:p.color,ranks:p.ranks,wins:p.wins||0,hat:p.profile.hat,accent:p.profile.accent,owner:p.profile.owner,atomic:this.atomicState(p)}));}
   broadcast(data){const raw=JSON.stringify(data);for(const p of this.players.values())if(p.joined)try{p.ws.send(raw);}catch{}}
   async fetch(req){
     if(req.headers.get('Upgrade')?.toLowerCase()!=='websocket')return response({ok:true,protocol:PROTOCOL,capacity:CAP,players:this.roster().length});
@@ -111,7 +112,7 @@ export class GameRoom extends DurableObject {
     }else if(m.t==='emote'){
       if(m.key==='atomic'){
         if(p.profile.atomic && Date.now()-p.atomicAt>=20000){
-          p.atomicAt=Date.now();this.broadcast({t:'atomic',i:p.id});
+          p.atomicAt=Date.now();this.broadcast({t:'atomic',i:p.id,...this.atomicState(p)});
         }
         return;
       }
@@ -169,6 +170,7 @@ export class GameRoom extends DurableObject {
         if(nearby.length)send(receiver.ws,{t:'fx',events:nearby.slice(-90)});
       } catch {}
     }
+    if(this.tickNumber%40===0){const casts=[...this.players.values()].filter(p=>p.joined&&p.atomicAt).map(p=>({i:p.id,...this.atomicState(p)}));if(casts.length)this.broadcast({t:'atomicState',casts});}
     if(this.combat.rosterDirty){this.combat.rosterDirty=false;this.broadcast({t:'roster',players:this.roster().length,roster:this.roster()});}
   }
   webSocketClose(ws){this.leave(ws);}webSocketError(ws){this.leave(ws);}

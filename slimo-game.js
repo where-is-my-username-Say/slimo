@@ -301,19 +301,19 @@ const skills = {
     { banks: 3, text: 'Globs can bounce off pillars three times.' }
   ], ['A single pinball spark at the wall.', 'Two rebound rings spin off the pillar.', 'A violet pinball burst sprays in both directions.']),
   swift: skill('Slipstream', 'Dodge & Nova', 0x91f6df, 'dash', [
-    { cooldown: .85, text: 'Dodge cooldown drops to 0.85 s.' },
-    { cooldown: .72, text: 'Dodge cooldown drops to 0.72 s.' },
-    { cooldown: .59, text: 'Dodge cooldown drops to 0.59 s.' }
+    {"cooldown": 0.78, "text": "Dodge cooldown drops to 0.78 s."},
+    {"cooldown": 0.62, "text": "Dodge cooldown drops to 0.62 s."},
+    {"cooldown": 0.46, "text": "Dodge cooldown drops to 0.46 s."}
   ], ['A short teal trail.', 'Two offset speed ribbons.', 'A triple wave peels off behind the dash.']),
   phase: skill('Ghost Dodge', 'Dodge & Nova', 0xc9c6ff, 'ghost', [
-    { inv: .035, text: '+35 ms dodge invulnerability.' },
-    { inv: .065, text: '+65 ms dodge invulnerability.' },
-    { inv: .095, text: '+95 ms dodge invulnerability.' }
+    {"inv": 0.06, "perfect": 0.02, "text": "+60 ms dodge invulnerability and +20 ms perfect-dodge window."},
+    {"inv": 0.12, "perfect": 0.04, "text": "+120 ms dodge invulnerability and +40 ms perfect-dodge window."},
+    {"inv": 0.18, "perfect": 0.06, "text": "+180 ms dodge invulnerability and +60 ms perfect-dodge window."}
   ], ['A pale afterimage fades out.', 'Twin afterimages split sideways.', 'A ghost shell expands through three silhouettes.']),
   counter: skill('Revenge Recipe', 'Dodge & Nova', 0xff9cbc, 'counter', [
-    { damage: 3, time: 1.95, text: '+3 counter damage and 1.95 s to use it after a perfect dodge.' },
-    { damage: 5, time: 2.20, text: '+5 counter damage and 2.20 s to use it after a perfect dodge.' },
-    { damage: 8, time: 2.50, text: '+8 counter damage and 2.50 s to use it after a perfect dodge.' }
+    {"damage": 5, "time": 2.4, "text": "+5 counter damage and 2.40 s to use it after a perfect dodge."},
+    {"damage": 9, "time": 2.8, "text": "+9 counter damage and 2.80 s to use it after a perfect dodge."},
+    {"damage": 14, "time": 3.2, "text": "+14 counter damage and 3.20 s to use it after a perfect dodge."}
   ], ['A pink mark flashes on the dodge.', 'Two pink marks trade places.', 'A pink crown snaps shut on the counter.']),
   battery: skill('Crowd Favorite', 'Dodge & Nova', 0xffd383, 'spark', [
     { energy: 1.13, text: 'Gain 13% more Nova energy from combat.' },
@@ -2209,7 +2209,7 @@ function hasCover(x, z, nx, nz, margin = 0) {
   return runCover().some(o => segmentCircle(x, z, nx, nz, o.x, o.z, o.r + margin) !== Infinity);
 }
 function dashAge(p) { return moves.dash.time - p.dashTime; }
-function perfectWindow(p) { return p.dashTime > 0 && dashAge(p) < moves.dash.perfect; }
+function perfectWindow(p) { return p.dashTime > 0 && dashAge(p) < moves.dash.perfect + skillValue(p,'phase','perfect'); }
 function perfectDodge(i) {
   const p = state.p[i];
   if (!perfectWindow(p) || p.counter > 0) return;
@@ -2911,8 +2911,7 @@ function showEffect(q) {
   const height = .88 + (q.height || 0);
   switch (q.type) {
     case 'atomic': {
-      const actor=q.i===0?slimoDuel?.host:q.i===1?slimoDuel?.guest:null;
-      if(mode!=='guest'||actor?.atomic) startAtomic(q.i);
+      startAtomic(q.i,q.castId);
       break;
     }
     case 'ownerWave':
@@ -3138,7 +3137,6 @@ function clearFx(clearEvents = true) {
   if (clearEvents) {
     magicView?.clear();
     slimoFinish=null; slimoImpact=null;
-    for (const [key, effect] of atomicEffects) clearAtomicEffect(key, effect);
     $('slimoImpact').hidden = true;
     delete document.body.dataset.impactFrame;
     lastEvent = 0;
@@ -5092,7 +5090,7 @@ function broadcastState(now = performance.now()) {
   if (!link?.open || !welcomed || (link.dataChannel?.bufferedAmount || 0) > 16384) return;
   const fresh = copyWireState(now);
   const paused = !gameReady() || !remoteReady;
-  const packet = { t: 'state', tick: simulationTick, ack: lastRemoteSequence, s: { ...fresh, paused } };
+  const packet = { t: 'state', tick: simulationTick, ack: lastRemoteSequence, s: { ...fresh, paused }, atomic: atomicWireSessions() };
   if(!send(packet))return;
   keyframeAt = now;
   keyframePhase = state.phase;
@@ -5108,6 +5106,7 @@ function acceptKeyframe(packet) {
   syncDraftClock(s, now);
   if (sameRound && Number.isInteger(packet.tick) && packet.tick < lastMotionTick && s.phase === 'fight') s.timer = state.timer;
   state = s;
+  syncAtomicSessions(packet.atomic);
   lastSnapshot = projectileFrameAt = now;
   const tick = Number.isInteger(packet.tick) ? packet.tick : lastMotionTick + 1;
   const ack = Number.isInteger(packet.ack) ? packet.ack : 0;
@@ -5970,6 +5969,7 @@ async function openPublicConnection() {
         dropSpeechBubble(id);
       }
       room.roster = players;
+      for(const p of packet.roster) if(players.has(p.id) && p.atomic) syncAtomicSession(p.id,p.atomic);
       room.kills = room.roster.get(room.id)?.wins || 0;
       if (packet.t === 'joined') sendRoomInput(true);
       room.count = Number.isInteger(packet.players) ? packet.players : players.size;
@@ -5984,7 +5984,9 @@ async function openPublicConnection() {
       }
       if (room.events.length > 200) room.events.splice(0, room.events.length - 200);
     } else if (packet.t === 'atomic') {
-      if(room.roster.has(packet.i)) startAtomic(packet.i);
+      if(room.roster.has(packet.i)) startAtomic(packet.i,packet.castId,packet.ageMs);
+    } else if (packet.t === 'atomicState') {
+      if(Array.isArray(packet.casts))for(const cast of packet.casts.slice(0,ROOM_CAP))if(room.roster.has(cast?.i))syncAtomicSession(cast.i,cast);
     } else if (packet.t === 'voiceSignal') {
       handleRoomVoiceSignal(packet);
     } else if (packet.t === 'chat') {
@@ -6520,6 +6522,7 @@ function leave(message = '') {
   entryNonce++;
   pending = null;
   mode = 'lobby';
+  clearAllAtomic();
   roomId = '';
   closeOverlay(false);
   resetInputs();
@@ -6537,6 +6540,7 @@ function leave(message = '') {
   if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
 }
 function dropRival(message = 'Your rival left. The room is still open.') {
+  clearAtomicCaster(1);
   if (mode !== 'host') return;
   const former = link;
   stopFastChannel();
@@ -6679,7 +6683,7 @@ function attach(connection, hostSide, token) {
     if(hostSide && packet.t==='slimoEmote' && ['fight','round','over'].includes(state.phase)) {
       const now=performance.now(), rival=slimoDuel?.guest;
       if(packet.key==='atomic' && rival?.atomic && now-rivalEmoteAt>=20000){
-        rivalEmoteAt=now; event('atomic',0,0,{i:1,color:rival.color}); broadcastState();
+        rivalEmoteAt=now; const castId=startAtomic(1); event('atomic',0,0,{i:1,color:rival.color,castId}); broadcastState();
       }else if(packet.key==='wave' && rival?.owner){
         event('ownerWave',0,0,{i:1,color:rival.color}); broadcastState();
       }

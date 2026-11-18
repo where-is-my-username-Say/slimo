@@ -14,6 +14,7 @@
  *   8.45 – 16 s  AFTERMATH  Embers rise, shards drift, motes linger, then everything fades.
  *
  * Everything is procedural: canvas textures (runes, sprites) + GLSL shaders.
+ * The full effect is scaled by totalScale; a persistent aura follows afterward.
  * No external assets. Canvas textures are shared between simultaneous casts
  * (reference counted) and disposed when the last effect is cleared.
  *
@@ -24,6 +25,8 @@
 
 const ATOMIC_CONFIG = {
   durationSeconds: 16,
+  totalScale: 3,          // total cinematic + aura scale, relative to the uploaded effect
+  aura: { radius: .78, height: .95, particles: 40, reducedParticles: 14, opacity: .48 },
 
   colors: {
     abyss: 0x2a0845,     // deep abyssal purple
@@ -108,6 +111,10 @@ const ATOMIC_CONFIG = {
 };
 
 const atomicEffects = new Map();
+// Session state outlives round cleanup. Only leaving/removing a caster clears it.
+const atomicSessions = new Map();
+const atomicAuras = new Map();
+let atomicCastSerial = 0;
 
 /* ------------------------------------------------------------------ */
 /* Small helpers                                                       */
@@ -703,13 +710,84 @@ function makeAtomicEffect(reduced) {
 /* Lifecycle                                                           */
 /* ------------------------------------------------------------------ */
 
-function startAtomic(caster) {
-  if(mode==='lobby'||!Number.isInteger(caster))return;
-  const key=mode+':'+caster;
-  if(atomicEffects.has(key))return;
-  atomicEffects.set(key,{
-    ...makeAtomicEffect(settings.reduced),caster,mode,started:performance.now()
-  });
+function startAtomic(caster, castId, ageMs = 0) {
+  if(mode==='lobby'||!Number.isInteger(caster)||caster<0||caster>65535)return;
+  const key=mode+':'+caster, previous=atomicSessions.get(key), now=performance.now();
+  if(castId===undefined){
+    if(previous && now-previous.started < ATOMIC_CONFIG.durationSeconds*1000)return previous.castId;
+    castId=++atomicCastSerial;
+  }
+  if(!Number.isSafeInteger(castId)||castId<1||!Number.isFinite(ageMs)||ageMs<0)return;
+  if(previous?.castId===castId)return castId;
+  const old=atomicEffects.get(key);if(old)clearAtomicEffect(key,old);
+  const session={caster,mode,castId,started:now-Math.min(ageMs,ATOMIC_CONFIG.durationSeconds*1000)};
+  atomicSessions.set(key,session);
+  if(ageMs<ATOMIC_CONFIG.durationSeconds*1000){
+    atomicEffects.set(key,{...makeAtomicEffect(settings.reduced),...session});
+  }
+  return castId;
+}
+
+function syncAtomicSession(caster, cast) {
+  if(!cast||typeof cast!=='object')return;
+  startAtomic(caster,cast.castId,cast.ageMs);
+}
+
+function atomicWireSessions() {
+  const now=performance.now();
+  return [...atomicSessions.values()].filter(s=>s.mode===mode&&(s.caster===0||s.caster===1))
+    .map(s=>({i:s.caster,castId:s.castId,ageMs:Math.min(ATOMIC_CONFIG.durationSeconds*1000,Math.max(0,now-s.started))}));
+}
+
+function syncAtomicSessions(casts) {
+  if(mode!=='guest'||!Array.isArray(casts)||casts.length>2)return;
+  // Host snapshots are authoritative. Restrict visuals to the two duel slots.
+  const seen=new Set();
+  for(const cast of casts){
+    if(!cast||![0,1].includes(cast.i)||seen.has(cast.i)||!Number.isSafeInteger(cast.castId)||cast.castId<1||!Number.isFinite(cast.ageMs)||cast.ageMs<0)continue;
+    seen.add(cast.i);syncAtomicSession(cast.i,cast);
+  }
+  for(const s of [...atomicSessions.values()])if(s.mode===mode&&!seen.has(s.caster))clearAtomicCaster(s.caster);
+}
+
+function makeAtomicAura(reduced) {
+  const C=ATOMIC_CONFIG,group=new T.Group(),tex=acquireAtomicTextures(reduced?C.detail.reduced.textureSize:C.detail.textureSize);
+  const rings=[];
+  for(let i=0;i<2;i++){
+    const ring=new T.Mesh(new T.RingGeometry(C.aura.radius-.025,C.aura.radius+.025,reduced?32:64),new T.MeshBasicMaterial({color:i?C.colors.magenta:C.colors.violet,transparent:true,opacity:0,depthWrite:false,side:T.DoubleSide,blending:T.AdditiveBlending}));
+    ring.rotation.x=-Math.PI/2;ring.position.y=.03+i*.07;group.add(ring);rings.push(ring);
+  }
+  const count=reduced?C.aura.reducedParticles:C.aura.particles,positions=new Float32Array(count*3);
+  const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.BufferAttribute(positions,3).setUsage(T.DynamicDrawUsage));
+  const points=new T.Points(geometry,new T.PointsMaterial({map:tex.glow,color:C.colors.sparks,size:.075,transparent:true,opacity:0,depthWrite:false,blending:T.AdditiveBlending}));
+  points.frustumCulled=false;group.add(points);scene.add(group);
+  return {group,rings,points,positions,reduced,released:false};
+}
+
+function drawAtomicAura(aura, age) {
+  const C=ATOMIC_CONFIG,A=C.aura, intensity=aura.reduced?C.reducedIntensity:1;
+  const fade=smooth(0,1.2,age),pulse=.85+.15*Math.sin(age*1.8);
+  aura.rings.forEach((ring,i)=>{ring.scale.setScalar((i?.82:1)*pulse);ring.material.opacity=A.opacity*.6*intensity*fade;});
+  const count=aura.positions.length/3;
+  for(let i=0;i<count;i++){
+    const t=(i*.61803398875+age*(aura.reduced?.08:.16))%1;
+    const angle=i*2.399963+age*.45, r=A.radius*(.55+.3*Math.sin(i*1.7+t*2));
+    aura.positions[i*3]=Math.cos(angle)*r;aura.positions[i*3+1]=.06+t*A.height;aura.positions[i*3+2]=Math.sin(angle)*r;
+  }
+  aura.points.geometry.attributes.position.needsUpdate=true;
+  aura.points.material.opacity=A.opacity*intensity*fade;
+}
+
+function clearAtomicCaster(caster) {
+  for(const [key,session] of [...atomicSessions]){
+    if(session.caster!==caster)continue;
+    const effect=atomicEffects.get(key);if(effect)clearAtomicEffect(key,effect);
+    const aura=atomicAuras.get(key);if(aura){clearAtomicEffect(key,aura);atomicAuras.delete(key);}
+    atomicSessions.delete(key);
+  }
+}
+function clearAllAtomic() {
+  for(const session of [...atomicSessions.values()])clearAtomicCaster(session.caster);
 }
 
 function clearAtomicEffect(key, effect) {
@@ -723,7 +801,7 @@ function clearAtomicEffect(key, effect) {
     effect.released=true;
     releaseAtomicTextures();
   }
-  atomicEffects.delete(key);
+  if(atomicEffects.get(key)===effect)atomicEffects.delete(key);
 }
 
 /* ------------------------------------------------------------------ */
@@ -951,28 +1029,30 @@ function animateAtomic(fx, age, I) {
 }
 
 function drawAtomic(now) {
-  for(const [key,effect] of atomicEffects) {
-    const age=Math.max(0,(now-effect.started)/1000);
-    if(mode!==effect.mode||age>=ATOMIC_CONFIG.durationSeconds){
-      clearAtomicEffect(key,effect);
-      continue;
+  for(const [key,session] of [...atomicSessions]) {
+    if(mode!==session.mode||mode==='lobby'||(mode==='public'&&!publicRoom.roster.has(session.caster))){
+      clearAtomicCaster(session.caster);continue;
     }
-    const isPublic=mode==='public';
-    const caster=effect.caster;
-    if(isPublic&&!publicRoom.roster.has(caster)){
-      clearAtomicEffect(key,effect);
-      continue;
-    }
-    const isSelf=isPublic&&caster===publicRoom.id;
+    const age=Math.max(0,(now-session.started)/1000),duration=ATOMIC_CONFIG.durationSeconds;
+    let effect=atomicEffects.get(key);
+    let aura=atomicAuras.get(key);
+    if(age>=duration&&!aura){aura=makeAtomicAura(settings.reduced);atomicAuras.set(key,aura);}
+    if(effect&&age>=duration){clearAtomicEffect(key,effect);effect=null;}
+    if(aura)aura.group.visible=age>=duration;
+    const isPublic=mode==='public',caster=session.caster,isSelf=isPublic&&caster===publicRoom.id;
     const model=isPublic?(isSelf?fighters[0]:publicRoom.models.get(caster)):fighters[caster];
     const pose=isPublic?(isSelf?publicPose():interpolatePublic(caster)):renderedPose(caster);
-    effect.group.visible=!!pose && (isPublic||pose.active);
-    if(!effect.group.visible)continue;
-    const root=model?.root.position;
-    const size=pose.size||1;
-    effect.group.position.set(root?.x??pose.x,root?.y??pose.air??0,root?.z??pose.z);
-    effect.group.scale.setScalar(size);
-
-    animateAtomic(effect,age,effect.reduced?ATOMIC_CONFIG.reducedIntensity:1);
+    const visible=!!pose&&(isPublic||pose.active);
+    for(const visual of [effect,aura]){
+      if(!visual)continue;
+      visual.group.visible=visible&&(visual!==aura||age>=duration);
+      if(!visual.group.visible)continue;
+      const root=model?.root.position,size=(pose.size||1)*ATOMIC_CONFIG.totalScale;
+      visual.group.position.set(root?.x??pose.x,root?.y??pose.air??0,root?.z??pose.z);
+      visual.group.scale.setScalar(size);
+    }
+    if(!visible)continue;
+    if(effect)animateAtomic(effect,age,effect.reduced?ATOMIC_CONFIG.reducedIntensity:1);
+    if(aura&&age>=duration)drawAtomicAura(aura,age-duration);
   }
 }

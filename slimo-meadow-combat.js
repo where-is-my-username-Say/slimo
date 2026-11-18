@@ -31,7 +31,7 @@ export class MeadowCombat {
   prepare(p) {
     Object.assign(p, { maxHp: 100 + stat(p,'colossus','hp'), size: 1 + stat(p,'colossus','size'),
       mana: p.mana ?? 100, cooldowns: p.cooldowns || {}, castAt: p.castAt ?? -Infinity,
-      burnTicks: 0, burnClock: 0, chill: 0, chillAmount: 0, hit: 0, shield: 0,
+      inv: 0, burnTicks: 0, burnClock: 0, chill: 0, chillAmount: 0, hit: 0, shield: 0,
       respawnAt: 0, guarded: false, secondUsed: false, combo: 0, chainUntil: 0, counterUntil: 0 });
     p.hp = p.maxHp;
     return p;
@@ -66,6 +66,7 @@ export class MeadowCombat {
       const length = Math.hypot(p.ix || 0,p.iz || 0);
       p.attack='';p.attackTime=0;
       p.dashTime = .268; p.dash = stat(p,'swift','cooldown') || .98;
+      p.inv = .214 + stat(p,'phase','inv');
       p.kx = (length > .12 ? p.ix/length : -Math.sin(p.aim || 0)) * 23;
       p.kz = (length > .12 ? p.iz/length : -Math.cos(p.aim || 0)) * 23;
       this.emit('dash',p.x,p.z,{i:p.id,color:p.color,angle:p.r}); return true;
@@ -89,8 +90,8 @@ export class MeadowCombat {
       this.emit('playTap',target.x,target.z,{i:target.id,j:source.id,color:source.color,source:type,height:target.air || 0});
       return false;
     }
-    if (target.dashTime > 0 && .268-target.dashTime < .214+stat(target,'phase','inv')) {
-      if (.268-target.dashTime < .154 && target.counterUntil <= this.time) {
+    if (target.inv > 0) {
+      if (target.dashTime > 0 && .268-target.dashTime < .154+stat(target,'phase','perfect') && target.counterUntil <= this.time) {
         target.counterUntil = this.time + stat(target,'counter','time',1.65);
         this.emit('perfect',target.x,target.z,{i:target.id,color:target.color});
       }
@@ -292,7 +293,7 @@ export class MeadowCombat {
           stun:0,chill:0,burnTicks:0,en:0,guarded:false,secondUsed:false});this.emit('spawn',p.x,p.z,{i:p.id,color:p.color});}
         else continue;
       }
-      for(const key of ['dash','dashTime','stun','hit','chill'])p[key]=Math.max(0,(p[key]||0)-dt);
+      for(const key of ['dash','dashTime','inv','stun','hit','chill'])p[key]=Math.max(0,(p[key]||0)-dt);
       p.mana=Math.min(100,p.mana+dt*9); p.en=Math.min(100,p.en+dt*1.5);
       if(!W.insideRing(p.x,p.z)){p.chill=p.chillAmount=p.burnTicks=0;if(this.time-(p.lastHit??-10)>3)p.hp=Math.min(p.maxHp,p.hp+dt*14);}
       if(p.burnTicks){p.burnClock-=dt;if(p.burnClock<=0){p.burnClock+=.6;p.burnTicks--;const owner=this.players.get(p.burnOwner);

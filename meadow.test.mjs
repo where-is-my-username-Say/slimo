@@ -142,3 +142,21 @@ test('server movement agrees with actual browser prediction for walking, attacks
     for(const key of ['x','z','vx','vz','kx','kz'])assert.ok(Math.abs(p[key]-expected[key])<1e-10,key+' '+JSON.stringify(extra));
   }
 });
+
+test('dodge upgrades have stronger rank scaling while base dodge remains unchanged',()=>{
+ assert.deepEqual(W.passives.swift.levels.map(l=>l.cooldown),[.78,.62,.46]);
+ assert.deepEqual(W.passives.phase.levels.map(l=>l.inv),[.06,.12,.18]);
+ assert.deepEqual(W.passives.counter.levels.map(l=>l.damage),[5,9,14]);
+ const {engine,p}=setup();assert.equal(engine.startMove(p,'dash'),true);assert.equal(p.dash,.98);assert.equal(p.inv,.214);assert.equal(p.dashTime,.268);
+ // Browser cards and host simulation use precisely the server's rank values.
+ const source=readFileSync(new URL('./slimo-game.js',import.meta.url),'utf8');
+ const skills=vm.runInNewContext(source.slice(source.indexOf('const skills ='),source.indexOf('const passiveSkillIds'))+'\nskills',{skill:(name,group,color,icon,levels)=>({levels})});
+ for(const key of ['swift','phase','counter'])assert.equal(JSON.stringify(skills[key].levels),JSON.stringify(W.passives[key].levels));
+});
+test('Ghost Dodge protects after dash movement ends and upgraded perfect dodges earn the stronger counter',()=>{
+ const {engine,p,target}=setup({x:0,z:0},{x:0,z:2},{phase:3,swift:3,counter:3});
+ engine.startMove(p,'dash');assert.equal(p.dash,.46);
+ advance(engine,.2);assert.equal(engine.hit(target,p,10,{type:'slap'}),false);assert.ok(Math.abs(p.counterUntil-engine.time-3.2)<1e-8);
+ advance(engine,.1);assert.equal(p.dashTime,0);assert.ok(p.inv>0);assert.equal(engine.hit(target,p,10,{type:'spit'}),false);assert.equal(p.hp,100);
+ advance(engine,.1);assert.equal(p.inv,0);assert.equal(engine.hit(target,p,10,{type:'slap'}),true);assert.equal(p.hp,90);
+});
