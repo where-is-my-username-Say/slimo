@@ -2,7 +2,13 @@
 
 Live updated game: **https://slimo-ten.vercel.app/api/slimo/play**. Reload this address on both phones before creating a fresh friend-duel invitation. The original Vercel root may still contain older frontend files.
 
-The existing Cloudflare `slimo-meadow` Worker serves accounts, Open Meadow, an authenticated friend-duel relay, and a matching browser client through Vercel's existing API rewrite. Recorded audio remains under the unchanged Vercel `/audio/` paths. The slime model and basic slap/spit/dodge/Nova parameters are retained.
+The existing Cloudflare `slimo-meadow` Worker serves accounts, Open Meadow, an authenticated friend-duel relay, and a matching browser client through Vercel's existing API rewrite. Recorded audio is included as MP3 files beside `index.html`. The slime model and basic slap/spit/dodge/Nova parameters are retained.
+
+## Atomic cinematic and flat layout
+
+`slimo-atomic.js` is the exact uploaded cinematic animation: charge, implosion, detonation and aftermath. It replaces the old ring effect and remains editable through `ATOMIC_CONFIG`. Meadow authorizes casts and enforces the cooldown on the server, then broadcasts to the room. Friend duels relay requests to the host, which checks permission and cooldown and broadcasts the cast. The procedural visuals render on each player’s device. Atomic remains cosmetic and does not change damage or the slime model.
+
+No subfolders are needed in this release. Three.js, PeerJS, MP3s, checks and tests are all beside `index.html`; paths and npm commands match this layout. Do not upload `node_modules`, local credentials or old duplicate copies of the game.
 
 ## Latest lighting and network changes
 
@@ -43,15 +49,15 @@ npm test
 
 Deploy to the existing Worker/account and retain its secrets and Durable Object namespaces. The configuration retains the v1 migration for `GameRoom`/`SlimoAccounts` and v2 for `DuelRelay`. Meadow protocol is **4**; friend-duel protocol is **7**. Google Identity Services must authorize `https://slimo-ten.vercel.app`; set the Google client ID and Owner email in Cloudflare configuration. Existing credentials were preserved by this update.
 
-The manually triggered **Deploy Slimo Worker** GitHub workflow supports later deployments from a phone; see `DEPLOY-FROM-PHONE.md`. `npm run verify:worker` checks the configured Worker's public protocol versions.
+All game assets, libraries, build commands and tests now live in this one folder. See `DEPLOY-FROM-PHONE.md` for uploads and server deployment. `npm run verify:worker` checks the configured Worker's public protocol versions.
 
 ## Validation limits
 
-87 automated tests pass. Both sunlight shader programs compiled and linked with Mesa OpenGL ES. A rendered depth/shadow test produced scattering for visible light, none for blocked light, and less scattering when foreground depth shortened the ray. Optional reproduction on Linux with Mesa/EGL:
+95 automated tests pass. Both sunlight shader programs compiled and linked with Mesa OpenGL ES. A rendered depth/shadow test produced scattering for visible light, none for blocked light, and less scattering when foreground depth shortened the ray. Optional reproduction on Linux with Mesa/EGL:
 
 ```sh
-node scripts/export-sunlight-shaders.mjs /tmp/slimo-shaders.json
-python3 scripts/check-sunlight-gl.py /tmp/slimo-shaders.json
+node export-sunlight-shaders.mjs /tmp/slimo-shaders.json
+python3 check-sunlight-gl.py /tmp/slimo-shaders.json
 ```
 
-The production Worker and all 15 versioned browser assets were read back and checked after deployment. Full browser/device rendering and signed-in two-player performance are not verified by these tests. No measured phone FPS gain or lower Oman ping is claimed.
+This cinematic release is deployed to the existing Worker. All 16 versioned browser assets were read back and their hashes checked; the deployed Atomic source matches the upload exactly. All seven Atomic shader programs compiled and linked with Mesa OpenGL ES. Full browser/device rendering and signed-in two-player performance are not verified by these tests. No measured phone FPS gain or lower Oman ping is claimed.

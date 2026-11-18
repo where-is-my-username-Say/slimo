@@ -5,11 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "python3 -m http.server 8765 --bind 127.0.0.1",
-    "test": "node --test tests/*.test.mjs",
-    "check": "node scripts/check.mjs",
+    "test": "node --test *.test.mjs",
+    "check": "node check.mjs",
     "deploy:worker": "wrangler deploy",
-    "verify:worker": "node scripts/verify-worker.mjs",
-    "build:live-client": "node scripts/build-live-client.mjs",
+    "verify:worker": "node verify-worker.mjs",
+    "build:live-client": "node build-live-client.mjs",
     "predeploy:worker": "npm run build:live-client"
   },
   "devDependencies": {

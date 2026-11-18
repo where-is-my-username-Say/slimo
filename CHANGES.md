@@ -1,3 +1,11 @@
+# Exact cinematic Atomic + flat upload package
+
+- Replaced the previous Atomic effect with the exact uploaded `slimo-atomic.js`.
+- Kept server permission/cooldown enforcement and multiplayer cast broadcasting.
+- Flattened bundled libraries, build tools and tests; updated all loading/import/npm paths.
+- Included all audio and a rebuilt, matching Worker-hosted frontend.
+- Slime model and basic fight behavior retained.
+
 # Current Slimo release
 
 Published to the existing `slimo-meadow` Worker on 18 November 2026 (Asia/Muscat). Updated browser entry: https://slimo-ten.vercel.app/api/slimo/play.

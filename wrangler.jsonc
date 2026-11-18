@@ -3,6 +3,7 @@
   "name": "slimo-meadow",
   "main": "worker.js",
   "compatibility_date": "2026-11-15",
+  "keep_vars": true,
   "vars": {
     "MEADOW_REGION": "me",
     "SLIMO_ORIGIN": "https://slimo-ten.vercel.app",
